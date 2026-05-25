@@ -71,7 +71,7 @@ export async function handleAuth(
     }
 
     // Send email via Resend
-    await fetch("https://api.resend.com/emails", {
+    const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -93,6 +93,12 @@ export async function handleAuth(
         `,
       }),
     });
+
+    if (!resendRes.ok) {
+      const resendBody = await resendRes.text().catch(() => "");
+      console.error("Resend send failed", resendRes.status, resendBody);
+      return err("Email delivery failed. Check email provider config.", 502, origin);
+    }
 
     return json({ ok: true }, 200, origin);
   }

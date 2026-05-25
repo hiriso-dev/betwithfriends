@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -12,14 +13,16 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setDevLink("");
     try {
-      await apiFetch("/api/auth/magic-link", {
+      const result = await apiFetch<{ ok: boolean; dev_link?: string }>("/api/auth/magic-link", {
         method: "POST",
         body: JSON.stringify({ email }),
       });
+      if (result.dev_link) setDevLink(result.dev_link);
       setSent(true);
-    } catch {
-      setError("Something went wrong. Try again.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
     } finally {
       setLoading(false);
     }
@@ -42,6 +45,14 @@ export default function LoginPage() {
               We sent a magic link to{" "}
               <strong className="text-foreground">{email}</strong>.
             </p>
+            {devLink && (
+              <p className="mt-3 rounded-lg border border-border bg-background/40 p-3 text-left text-sm">
+                Email provider is not configured. Use this dev link:
+                <a href={devLink} className="mt-1 block break-all text-accent underline">
+                  {devLink}
+                </a>
+              </p>
+            )}
             <button
               onClick={() => setSent(false)}
               className="mt-4 text-sm text-accent underline-offset-2 underline"
