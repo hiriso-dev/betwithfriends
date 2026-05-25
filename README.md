@@ -20,6 +20,45 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Deploy To Cloudflare With GitHub
+
+This repo deploys two separate Cloudflare Workers from GitHub:
+
+- `betwithfriends-api` from [worker/wrangler.production.toml](worker/wrangler.production.toml)
+- `betwithfriends` from [wrangler.jsonc](wrangler.jsonc)
+
+The workflow is in [.github/workflows/deploy-cloudflare.yml](.github/workflows/deploy-cloudflare.yml). It runs on pushes to `main` and on manual dispatch.
+
+### One-time Cloudflare setup
+
+1. Create the D1 database for the API worker.
+2. Apply the schema from [worker/src/db/schema.sql](worker/src/db/schema.sql).
+3. Create the R2 bucket referenced by [wrangler.jsonc](wrangler.jsonc).
+4. Replace `APP_URL` in [worker/wrangler.production.toml](worker/wrangler.production.toml) with your real frontend URL.
+5. Set the API worker secrets in Cloudflare once:
+	`JWT_SECRET`, `RESEND_API_KEY`, `FOOTBALL_DATA_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+
+### GitHub configuration
+
+Add these GitHub Actions secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Add these GitHub Actions repository variables:
+
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+
+`NEXT_PUBLIC_API_URL` should point to the deployed API worker URL. `NEXT_PUBLIC_VAPID_PUBLIC_KEY` must match the public VAPID key configured on the API worker.
+
+### Manual deploy commands
+
+```bash
+npm run worker:deploy:production
+npm run cf:deploy
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

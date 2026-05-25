@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "cf:build": "opennextjs-cloudflare build --config wrangler.jsonc",
+    "cf:deploy": "npm run cf:build && wrangler deploy --config wrangler.jsonc",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "worker:dev": "cd worker && wrangler dev",
     "worker:deploy": "cd worker && wrangler deploy",
+    "worker:deploy:production": "wrangler deploy --config worker/wrangler.production.toml",
     "db:init": "cd worker && wrangler d1 execute betwithfriends --local --file=src/db/schema.sql",
     "db:create": "cd worker && wrangler d1 create betwithfriends",
     "vapid:generate": "node -e \"const {generateVAPIDKeys}=require('web-push');const k=generateVAPIDKeys();console.log('Public:',k.publicKey);console.log('Private:',k.privateKey);\""
@@ -24,6 +27,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260525.1",
+    "@opennextjs/cloudflare": "^1.19.11",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
