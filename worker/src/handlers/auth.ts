@@ -65,6 +65,11 @@ export async function handleAuth(
 
     const link = `${env.APP_URL}/verify?token=${token}`;
 
+    // In dev (no RESEND_API_KEY), return the link directly for testing
+    if (!env.RESEND_API_KEY) {
+      return json({ ok: true, dev_link: link }, 200, origin);
+    }
+
     // Send email via Resend
     await fetch("https://api.resend.com/emails", {
       method: "POST",

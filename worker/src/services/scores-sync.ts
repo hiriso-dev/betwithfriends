@@ -39,6 +39,10 @@ function mapStage(stage: string): string {
 }
 
 export async function syncScores(env: Env): Promise<void> {
+  if (!env.FOOTBALL_DATA_API_KEY) {
+    console.log("syncScores: no API key set, skipping");
+    return;
+  }
   try {
     const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${WC_COMPETITION_CODE}/matches`, {
       headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY },

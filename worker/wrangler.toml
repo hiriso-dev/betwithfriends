@@ -9,7 +9,7 @@ APP_URL = "http://localhost:3000"
 [[d1_databases]]
 binding = "DB"
 database_name = "betwithfriends"
-database_id = "placeholder-replace-after-wrangler-d1-create"
+database_id = "75789eae-d657-4600-8edb-4990f0ec126b"
 
 [triggers]
 crons = ["*/5 * * * *"]

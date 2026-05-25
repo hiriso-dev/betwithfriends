@@ -6,6 +6,7 @@ import { handleBets } from "./handlers/bets";
 import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { syncScores } from "./services/scores-sync";
+import { processMatchResult } from "./services/scoring";
 import { sendPreGameReminders } from "./services/push-service";
 
 const corsHeaders = (origin: string) => ({
@@ -65,6 +66,18 @@ export default {
       }
       if (pathname.startsWith("/api/push")) {
         return handleNotifications(request, env, url, auth, json, err, origin);
+      }
+
+      // Dev-only: trigger scoring for a specific match
+      if (pathname === "/api/dev/score-match" && request.method === "POST" && !env.FOOTBALL_DATA_API_KEY) {
+        const { match_id, home_score, away_score } = await request.json<{ match_id: string; home_score: number; away_score: number }>();
+        await env.DB.prepare(
+          "UPDATE matches SET home_score=?, away_score=?, status='finished' WHERE id=?"
+        ).bind(home_score, away_score, match_id).run();
+        const match = await env.DB.prepare("SELECT * FROM matches WHERE id=?").bind(match_id).first();
+        if (!match) return err("Match not found", 404, origin);
+        await processMatchResult(env, match as Parameters<typeof processMatchResult>[1]);
+        return json({ ok: true, match_id }, 200, origin);
       }
 
       return err("Not found", 404, origin);
