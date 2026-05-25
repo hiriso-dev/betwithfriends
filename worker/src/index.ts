@@ -41,7 +41,7 @@ export default {
       const { pathname } = url;
       // Auth routes (no JWT required)
       if (pathname.startsWith("/api/auth")) {
-        return handleAuth(request, env, url, json, err, origin);
+        return await handleAuth(request, env, url, json, err, origin);
       }
 
       // All other routes require auth
@@ -52,19 +52,19 @@ export default {
       if (!auth) return err("Invalid token", 401, origin);
 
       if (pathname.startsWith("/api/groups")) {
-        return handleGroups(request, env, url, auth, json, err, origin);
+        return await handleGroups(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/matches")) {
-        return handleMatches(request, env, url, auth, json, err, origin);
+        return await handleMatches(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/bets")) {
-        return handleBets(request, env, url, auth, json, err, origin);
+        return await handleBets(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/special-bets")) {
-        return handleSpecialBets(request, env, url, auth, json, err, origin);
+        return await handleSpecialBets(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/push")) {
-        return handleNotifications(request, env, url, auth, json, err, origin);
+        return await handleNotifications(request, env, url, auth, json, err, origin);
       }
 
       // Dev-only: trigger scoring for a specific match
