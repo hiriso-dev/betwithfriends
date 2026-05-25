@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/jerome/Documents/betwithfriends/app/\\\\\\(app\\\\\\)/teams/\\\\[code\\\\])"
+    ],
+    "additionalDirectories": [
+      "/Users/jerome/Documents/betwithfriends/app/(app)/teams"
+    ]
+  }
+}

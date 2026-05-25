@@ -5,7 +5,8 @@ import { handleMatches } from "./handlers/matches";
 import { handleBets } from "./handlers/bets";
 import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
-import { syncScores } from "./services/scores-sync";
+import { handleStandings } from "./handlers/standings";
+import { syncScores, syncScorers } from "./services/scores-sync";
 import { syncOdds } from "./services/odds-sync";
 import { processMatchResult } from "./services/scoring";
 import { sendPreGameReminders } from "./services/push-service";
@@ -67,6 +68,9 @@ export default {
       if (pathname.startsWith("/api/push")) {
         return await handleNotifications(request, env, url, auth, json, err, origin);
       }
+      if (pathname.startsWith("/api/standings") || pathname.startsWith("/api/scorers")) {
+        return await handleStandings(request, env, url, auth, json, err, origin);
+      }
 
       // Dev-only: trigger scoring for a specific match
       if (pathname === "/api/dev/score-match" && request.method === "POST" && !env.FOOTBALL_DATA_API_KEY) {
@@ -90,6 +94,7 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
     await syncOdds(env);
     await syncScores(env);
+    await syncScorers(env);
     await sendPreGameReminders(env);
   },
 };

@@ -44,7 +44,21 @@ CREATE TABLE IF NOT EXISTS matches (
   draw_odds REAL,
   away_odds REAL,
   odds_updated_at INTEGER,
+  stadium TEXT,
+  venue_city TEXT,
   updated_at INTEGER DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS top_scorers (
+  id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  team_name TEXT NOT NULL,
+  team_code TEXT NOT NULL,
+  goals INTEGER DEFAULT 0,
+  assists INTEGER DEFAULT 0,
+  penalties INTEGER DEFAULT 0,
+  updated_at INTEGER DEFAULT (unixepoch()),
+  UNIQUE(player_name, team_code)
 );
 
 CREATE TABLE IF NOT EXISTS bets (

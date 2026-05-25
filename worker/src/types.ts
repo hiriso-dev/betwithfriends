@@ -31,7 +31,19 @@ export type Match = {
   draw_odds: number | null;
   away_odds: number | null;
   odds_updated_at: number | null;
+  stadium: string | null;
+  venue_city: string | null;
   updated_at: number;
+};
+
+export type TopScorer = {
+  id: string;
+  player_name: string;
+  team_name: string;
+  team_code: string;
+  goals: number;
+  assists: number;
+  penalties: number;
 };
 
 export type Bet = {

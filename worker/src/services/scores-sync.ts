@@ -11,12 +11,22 @@ type FDMatch = {
   status: string;
   stage: string;
   group: string | null;
+  venue?: string;
+  area?: { name: string };
   homeTeam: { name: string; tla: string };
   awayTeam: { name: string; tla: string };
   score: {
     fullTime: { home: number | null; away: number | null };
     winner: string | null;
   };
+};
+
+type FDScorer = {
+  player: { name: string };
+  team: { name: string; tla: string };
+  goals: number;
+  assists: number;
+  penalties: number;
 };
 
 function mapStatus(fdStatus: string): Match["status"] {
@@ -70,9 +80,11 @@ export async function syncScores(env: Env): Promise<void> {
 
         await env.DB.prepare(`
           UPDATE matches SET
-            status = ?, home_score = ?, away_score = ?, updated_at = unixepoch()
+            status = ?, home_score = ?, away_score = ?,
+            stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
+            updated_at = unixepoch()
           WHERE api_match_id = ?
-        `).bind(status, homeScore, awayScore, String(m.id)).run();
+        `).bind(status, homeScore, awayScore, m.venue ?? null, m.area?.name ?? null, String(m.id)).run();
 
         if (justFinished && homeScore !== null && awayScore !== null) {
           const fullMatch: Match = { ...existing as unknown as Match, status, home_score: homeScore, away_score: awayScore };
@@ -82,18 +94,53 @@ export async function syncScores(env: Env): Promise<void> {
       } else {
         await env.DB.prepare(`
           INSERT INTO matches (id, api_match_id, home_team, away_team, home_team_code, away_team_code,
-            match_date, home_score, away_score, status, stage, group_name)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            match_date, home_score, away_score, status, stage, group_name, stadium, venue_city)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           crypto.randomUUID(), String(m.id),
           m.homeTeam.name, m.awayTeam.name,
           m.homeTeam.tla, m.awayTeam.tla,
           matchDate, homeScore, awayScore,
-          status, mapStage(m.stage), m.group
+          status, mapStage(m.stage), m.group,
+          m.venue ?? null, m.area?.name ?? null
         ).run();
       }
     }
   } catch (e) {
     console.error("syncScores error:", e);
+  }
+}
+
+const SCORERS_INTERVAL = 30 * 60; // 30 min
+
+export async function syncScorers(env: Env): Promise<void> {
+  if (!env.FOOTBALL_DATA_API_KEY) return;
+
+  // Rate limit
+  const recent = await env.DB.prepare(
+    "SELECT MAX(updated_at) as last FROM top_scorers"
+  ).first<{ last: number | null }>();
+  if (recent?.last && recent.last > Math.floor(Date.now() / 1000) - SCORERS_INTERVAL) return;
+
+  try {
+    const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${WC_COMPETITION_CODE}/scorers`, {
+      headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY },
+    });
+    if (!res.ok) return;
+
+    const data = await res.json<{ scorers: FDScorer[] }>();
+
+    for (const s of data.scorers) {
+      const id = `${s.player.name}_${s.team.tla}`.replace(/\s+/g, "_");
+      await env.DB.prepare(`
+        INSERT INTO top_scorers (id, player_name, team_name, team_code, goals, assists, penalties, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
+        ON CONFLICT(player_name, team_code) DO UPDATE SET
+          goals = excluded.goals, assists = excluded.assists,
+          penalties = excluded.penalties, updated_at = unixepoch()
+      `).bind(id, s.player.name, s.team.name, s.team.tla, s.goals ?? 0, s.assists ?? 0, s.penalties ?? 0).run();
+    }
+  } catch (e) {
+    console.error("syncScorers error:", e);
   }
 }

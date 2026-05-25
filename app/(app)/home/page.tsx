@@ -1,0 +1,280 @@
+"use client";
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { useRouter } from "next/navigation";
+
+type Match = {
+  id: string;
+  home_team: string; away_team: string;
+  home_team_code: string; away_team_code: string;
+  match_date: number;
+  home_score: number | null; away_score: number | null;
+  status: "scheduled" | "live" | "finished" | "postponed";
+  stage: string; group_name: string | null;
+  stadium: string | null; venue_city: string | null;
+  home_odds: number | null; draw_odds: number | null; away_odds: number | null;
+  my_bet?: { home_score_pred: number; away_score_pred: number; points_earned: number | null; cote_applied: number | null };
+};
+
+type Group = { id: string; name: string; my_points: number; my_rank: number; member_count: number };
+
+export default function HomePage() {
+  const router = useRouter();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>("");
+  const [betTarget, setBetTarget] = useState<Match | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<Group[]>("/api/groups")
+      .then(grps => {
+        setGroups(grps);
+        const gid = grps[0]?.id ?? "";
+        setSelectedGroup(gid);
+        if (gid) return apiFetch<Match[]>(`/api/matches?group_id=${gid}`);
+        return apiFetch<Match[]>("/api/matches");
+      })
+      .then(setMatches)
+      .catch(() => router.push("/login"))
+      .finally(() => setLoading(false));
+  }, [router]);
+
+  useEffect(() => {
+    if (!selectedGroup || loading) return;
+    apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
+  }, [selectedGroup, loading]);
+
+  const now = Date.now() / 1000;
+  const upcoming = matches
+    .filter(m => m.status === "scheduled" && m.match_date > now)
+    .sort((a, b) => a.match_date - b.match_date);
+
+  const nextUnbet = upcoming.find(m => !m.my_bet);
+  const nextMatch = upcoming[0];
+  const featured = nextUnbet ?? nextMatch;
+
+  const recentFinished = matches
+    .filter(m => m.status === "finished")
+    .sort((a, b) => b.match_date - a.match_date)
+    .slice(0, 3);
+
+  if (loading) {
+    return (
+      <div className="p-4 space-y-4">
+        <div className="h-8 rounded-xl bg-surface animate-pulse w-40" />
+        <div className="h-40 rounded-2xl bg-surface animate-pulse" />
+        <div className="h-24 rounded-2xl bg-surface animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold">World Cup 2026</h1>
+        <span className="rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent">🇺🇸🇨🇦🇲🇽</span>
+      </div>
+
+      {/* Group selector (if multiple groups) */}
+      {groups.length > 1 && (
+        <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {groups.map(g => (
+            <button
+              key={g.id}
+              onClick={() => setSelectedGroup(g.id)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                selectedGroup === g.id ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"
+              }`}
+            >
+              {g.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Next bet CTA */}
+      {featured ? (
+        <div className="mb-6 rounded-2xl border border-accent/40 bg-surface p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
+            {nextUnbet ? "⚡ Next bet to place" : "🗓 Next match"}
+          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex-1 text-right">
+              <p className="font-bold">{featured.home_team}</p>
+              <p className="text-xs text-muted uppercase">{featured.home_team_code}</p>
+            </div>
+            <span className="mx-2 text-sm font-bold text-muted">vs</span>
+            <div className="flex-1 text-left">
+              <p className="font-bold">{featured.away_team}</p>
+              <p className="text-xs text-muted uppercase">{featured.away_team_code}</p>
+            </div>
+          </div>
+          <p className="mb-1 text-center text-xs text-muted">
+            {new Date(featured.match_date * 1000).toLocaleString("en-US", {
+              weekday: "short", month: "short", day: "numeric",
+              hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+            })}
+          </p>
+          {featured.group_name && (
+            <p className="mb-3 text-center text-[10px] text-muted">Group {featured.group_name}{featured.stadium ? ` · ${featured.stadium}` : ""}</p>
+          )}
+
+          {/* Odds preview */}
+          {(featured.home_odds || featured.draw_odds || featured.away_odds) && (
+            <div className="mb-3 flex justify-center gap-3 text-xs text-muted">
+              <span>H {featured.home_odds}×</span>
+              <span>D {featured.draw_odds}×</span>
+              <span>A {featured.away_odds}×</span>
+            </div>
+          )}
+
+          {nextUnbet && featured.my_bet === undefined ? (
+            <button
+              onClick={() => setBetTarget(featured)}
+              className="w-full rounded-xl bg-accent py-3 font-bold text-[#0f0f23] transition active:scale-95"
+            >
+              Place bet →
+            </button>
+          ) : featured.my_bet ? (
+            <div className="text-center text-sm text-muted">
+              ✓ Bet placed: <span className="font-semibold text-foreground">
+                {featured.my_bet.home_score_pred} – {featured.my_bet.away_score_pred}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mb-6 rounded-2xl border border-border bg-surface p-8 text-center text-muted text-sm">
+          No upcoming matches
+        </div>
+      )}
+
+      {/* My Groups */}
+      {groups.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-border bg-surface overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h2 className="font-semibold text-sm">My Groups</h2>
+          </div>
+          {groups.map(g => (
+            <div
+              key={g.id}
+              className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0 cursor-pointer active:bg-surface-hover"
+              onClick={() => router.push(`/groups/${g.id}`)}
+            >
+              <div>
+                <p className="font-semibold text-sm">{g.name}</p>
+                <p className="text-xs text-muted">{g.member_count} members</p>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-accent">{g.my_points.toFixed(1)}pts</p>
+                <p className="text-xs text-muted">Rank #{g.my_rank}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Recent results */}
+      {recentFinished.length > 0 && (
+        <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h2 className="font-semibold text-sm">Recent Results</h2>
+          </div>
+          {recentFinished.map(m => {
+            const bet = m.my_bet;
+            const betResult = bet
+              ? bet.home_score_pred === m.home_score && bet.away_score_pred === m.away_score ? "exact"
+              : (bet.home_score_pred > bet.away_score_pred) === (m.home_score! > m.away_score!) || (bet.home_score_pred === bet.away_score_pred) === (m.home_score === m.away_score) ? "result"
+              : "wrong"
+              : null;
+            const color = betResult === "exact" ? "text-success" : betResult === "result" ? "text-warning" : betResult === "wrong" ? "text-danger" : "text-muted";
+            return (
+              <div key={m.id} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{m.home_team} {m.home_score} – {m.away_score} {m.away_team}</p>
+                  <p className="text-[10px] text-muted">Group {m.group_name}</p>
+                </div>
+                {bet && (
+                  <div className="text-right ml-2">
+                    <p className={`text-sm font-bold ${color}`}>
+                      {bet.points_earned !== null && bet.points_earned > 0 ? `+${bet.points_earned.toFixed(1)}pts` : "0pts"}
+                    </p>
+                    <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Bet sheet */}
+      {betTarget && (
+        <BetSheet
+          match={betTarget}
+          groupId={selectedGroup || groups[0]?.id}
+          onClose={() => setBetTarget(null)}
+          onSaved={() => {
+            setBetTarget(null);
+            apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId: string; onClose: () => void; onSaved: () => void }) {
+  const [home, setHome] = useState(match.my_bet?.home_score_pred ?? 0);
+  const [away, setAway] = useState(match.my_bet?.away_score_pred ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
+  const locked = minutesLeft <= 5 || match.status !== "scheduled";
+
+  async function save() {
+    setSaving(true); setError("");
+    try {
+      await apiFetch("/api/bets", {
+        method: "POST",
+        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away }),
+      });
+      if (navigator.vibrate) navigator.vibrate(50);
+      onSaved();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl">
+        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
+        <h3 className="mt-3 mb-4 text-center text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
+        <div className="mb-6 flex items-center justify-center gap-6">
+          {[
+            { label: match.home_team, value: home, onChange: setHome },
+            { label: match.away_team, value: away, onChange: setAway },
+          ].reduce<React.ReactNode[]>((acc, item, i) => {
+            if (i > 0) acc.push(<span key="sep" className="text-2xl font-bold text-muted">-</span>);
+            acc.push(
+              <div key={item.label} className="flex flex-col items-center gap-2">
+                <p className="text-xs text-muted max-w-[80px] truncate text-center">{item.label}</p>
+                <button onClick={() => item.onChange(Math.min(20, item.value + 1))} disabled={locked} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30">+</button>
+                <span className="text-4xl font-bold w-12 text-center">{item.value}</span>
+                <button onClick={() => item.onChange(Math.max(0, item.value - 1))} disabled={locked} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30">−</button>
+              </div>
+            );
+            return acc;
+          }, [])}
+        </div>
+        {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}
+        <button onClick={save} disabled={saving || locked} className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50">
+          {saving ? "Saving…" : locked ? "Locked" : "Save prediction"}
+        </button>
+      </div>
+    </>
+  );
+}

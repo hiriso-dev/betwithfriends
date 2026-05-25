@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const nav = [
+  { href: "/home", icon: "🏠", label: "Home" },
   { href: "/fixtures", icon: "⚽", label: "Fixtures" },
   { href: "/groups", icon: "👥", label: "Groups" },
   { href: "/special", icon: "🌟", label: "Special" },
@@ -23,7 +24,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {nav.map((item) => {
             const active =
               item.href === "/fixtures"
-                ? pathname === "/fixtures" || pathname.startsWith("/fixtures/")
+                ? pathname === "/fixtures" || pathname.startsWith("/fixtures/") || pathname.startsWith("/teams/")
                 : pathname.startsWith(item.href);
             return (
               <Link
