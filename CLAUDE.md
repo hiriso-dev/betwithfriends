@@ -6,7 +6,7 @@ World Cup 2026 group betting PWA.
 - Frontend: Next.js 16 (App Router) + Tailwind CSS 4, dark-first design
 - Backend: Cloudflare Worker (`worker/`) — runs on localhost:8787 in dev
 - DB: Cloudflare D1 (SQLite)
-- Auth: Magic link via Resend, JWT Bearer cookie `bwf_token`
+- Auth: Email + password, JWT Bearer cookie `bwf_token`
 
 ## Dev setup
 1. `npm run db:create` — create D1 database, paste ID into `worker/wrangler.toml`
@@ -21,7 +21,6 @@ World Cup 2026 group betting PWA.
 
 ## Worker secrets (wrangler secret put)
 - `JWT_SECRET` — random string ≥32 chars
-- `RESEND_API_KEY`
 - `FOOTBALL_DATA_API_KEY` — from football-data.org (free)
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT` — mailto:your@email.com

@@ -3,8 +3,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
-  magic_link_token TEXT,
-  magic_link_expires INTEGER,
+  password_hash TEXT,
   created_at INTEGER DEFAULT (unixepoch())
 );
 
