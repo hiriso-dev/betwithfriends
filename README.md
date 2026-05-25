@@ -36,7 +36,7 @@ The workflow is in [.github/workflows/deploy-cloudflare.yml](.github/workflows/d
 3. Create the R2 bucket referenced by [wrangler.jsonc](wrangler.jsonc).
 4. Replace `APP_URL` in [worker/wrangler.production.toml](worker/wrangler.production.toml) with your real frontend URL.
 5. Set the API worker secrets in Cloudflare once:
-	`JWT_SECRET`, `RESEND_API_KEY`, `FOOTBALL_DATA_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
+   `JWT_SECRET`, `RESEND_API_KEY`, `FOOTBALL_DATA_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 
 ### GitHub configuration
 
