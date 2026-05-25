@@ -4,7 +4,7 @@ compatibility_date = "2025-05-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-APP_URL = "https://betwithfriends.example.com"
+APP_URL = "https://betwithfriends.jerome-ladeveze.workers.dev"
 
 [[d1_databases]]
 binding = "DB"

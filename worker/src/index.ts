@@ -29,7 +29,6 @@ function err(message: string, status = 400, origin = "*") {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
     const origin = request.headers.get("Origin") ?? "*";
 
     // CORS preflight
@@ -37,9 +36,9 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
-    const { pathname } = url;
-
     try {
+      const url = new URL(request.url);
+      const { pathname } = url;
       // Auth routes (no JWT required)
       if (pathname.startsWith("/api/auth")) {
         return handleAuth(request, env, url, json, err, origin);
