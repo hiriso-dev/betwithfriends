@@ -1,0 +1,19 @@
+name = "betwithfriends-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+APP_URL = "http://localhost:3000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "betwithfriends"
+database_id = "placeholder-replace-after-wrangler-d1-create"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[dev]
+port = 8787
+local_protocol = "http"

@@ -1,0 +1,38 @@
+{
+  "name": "betwithfriends",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "worker:dev": "cd worker && wrangler dev",
+    "worker:deploy": "cd worker && wrangler deploy",
+    "db:init": "cd worker && wrangler d1 execute betwithfriends --local --file=src/db/schema.sql",
+    "db:create": "cd worker && wrangler d1 create betwithfriends",
+    "vapid:generate": "node -e \"const {generateVAPIDKeys}=require('web-push');const k=generateVAPIDKeys();console.log('Public:',k.publicKey);console.log('Private:',k.privateKey);\""
+  },
+  "dependencies": {
+    "jose": "^6.2.3",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "resend": "^6.12.3",
+    "uuid": "^14.0.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260525.1",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "wrangler": "^4.94.0"
+  }
+}
