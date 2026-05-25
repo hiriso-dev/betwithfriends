@@ -3,6 +3,7 @@ export interface Env {
   JWT_SECRET: string;
   APP_URL: string;
   FOOTBALL_DATA_API_KEY?: string;
+  ODDS_API_KEY?: string;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
@@ -26,6 +27,10 @@ export type Match = {
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string | null;
   group_name: string | null;
+  home_odds: number | null;
+  draw_odds: number | null;
+  away_odds: number | null;
+  odds_updated_at: number | null;
   updated_at: number;
 };
 

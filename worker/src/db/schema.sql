@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS matches (
   status TEXT DEFAULT 'scheduled',
   stage TEXT,
   group_name TEXT,
+  home_odds REAL,
+  draw_odds REAL,
+  away_odds REAL,
+  odds_updated_at INTEGER,
   updated_at INTEGER DEFAULT (unixepoch())
 );
 
