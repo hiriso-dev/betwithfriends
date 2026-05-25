@@ -1,4 +1,14 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+
+function resolveApiBase() {
+  if (typeof window === "undefined") return RAW_API_BASE;
+  if (window.location.protocol === "https:" && RAW_API_BASE.startsWith("http://")) {
+    return RAW_API_BASE.replace(/^http:\/\//, "https://");
+  }
+  return RAW_API_BASE;
+}
+
+const API_BASE = resolveApiBase();
 
 function getToken(): string | null {
   if (typeof document === "undefined") return null;
