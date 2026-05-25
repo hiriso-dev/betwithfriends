@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": ".open-next/worker.js",
-	"name": "betwithfriends-api",
+	"name": "betwithfriends",
 	"compatibility_date": "2026-05-25",
 	"compatibility_flags": [
 		"nodejs_compat",
