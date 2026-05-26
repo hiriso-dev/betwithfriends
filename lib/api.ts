@@ -27,6 +27,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      document.cookie = "bwf_token=; path=/; max-age=0";
+      window.location.href = "/login";
+      return new Promise(() => {}); // never resolves — redirect in progress
+    }
     const text = await res.text().catch(() => "");
     let message = text;
     try { message = JSON.parse(text).error ?? text; } catch {}

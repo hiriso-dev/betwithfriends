@@ -41,14 +41,17 @@ export default function HomePage() {
 
   useEffect(() => {
     apiFetch<Group[]>("/api/groups")
-      .then(grps => {
+      .then(async grps => {
         setGroups(grps);
         const gid = grps[0]?.id ?? "";
         setSelectedGroup(gid);
-        if (gid) return apiFetch<Match[]>(`/api/matches?group_id=${gid}`);
-        return apiFetch<Match[]>("/api/matches");
+        const [matches, specials] = await Promise.all([
+          gid ? apiFetch<Match[]>(`/api/matches?group_id=${gid}`) : apiFetch<Match[]>("/api/matches"),
+          gid ? apiFetch<SpecialBet[]>(`/api/special-bets?group_id=${gid}`) : Promise.resolve<SpecialBet[]>([]),
+        ]);
+        setMatches(matches);
+        setSpecialBets(specials);
       })
-      .then(setMatches)
       .catch(() => router.push("/login"))
       .finally(() => setLoading(false));
   }, [router]);
@@ -108,7 +111,7 @@ export default function HomePage() {
       )}
 
       {/* Special bets — show first, priority */}
-      {selectedGroup && (
+      {groups.length > 0 && (
         <div className="mb-6 rounded-2xl border bg-surface overflow-hidden" style={{ borderColor: tournamentStarted ? undefined : "rgba(var(--color-accent),0.4)" }}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div>

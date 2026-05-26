@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { useInstallable } from "@/components/install-prompt";
 
 type UserProfile = {
   email: string;
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { canInstall, isIos, isStandalone, triggerInstall } = useInstallable();
 
   useEffect(() => {
     Promise.all([
@@ -95,6 +97,23 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Groups link */}
+      <div
+        className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden cursor-pointer active:bg-surface-hover transition"
+        onClick={() => router.push("/groups")}
+      >
+        <div className="flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">👥</span>
+            <div>
+              <p className="font-semibold text-sm">My Groups</p>
+              <p className="text-xs text-muted">Manage your betting groups</p>
+            </div>
+          </div>
+          <span className="text-muted text-lg">›</span>
+        </div>
+      </div>
+
       {/* Notifications */}
       <div className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
@@ -132,6 +151,48 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Install app */}
+      {!isStandalone && (
+        <div className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden">
+          <div className="px-4 py-3 border-b border-border">
+            <h2 className="font-semibold">Install App</h2>
+            <p className="text-xs text-muted mt-0.5">Add BetWithFriends to your home screen</p>
+          </div>
+          <div className="p-4">
+            {canInstall ? (
+              <button
+                onClick={triggerInstall}
+                className="w-full rounded-xl bg-accent py-3 font-semibold text-[#0f0f23] transition active:scale-95"
+              >
+                📲 Install app
+              </button>
+            ) : isIos ? (
+              <div className="text-sm text-muted space-y-2">
+                <p>Open this page in <strong className="text-foreground">Safari</strong> on your iPhone, then:</p>
+                <p>1. Tap the <strong className="text-foreground">Share ⬆️</strong> button at the bottom</p>
+                <p>2. Scroll down and tap <strong className="text-foreground">"Add to Home Screen"</strong></p>
+                <p>3. Tap <strong className="text-foreground">Add</strong></p>
+              </div>
+            ) : (
+              <div className="text-sm text-muted space-y-2">
+                <p>In <strong className="text-foreground">Chrome</strong>:</p>
+                <p>Tap <strong className="text-foreground">⋮ Menu → "Install app"</strong> or look for the install icon <strong className="text-foreground">⊕</strong> in the address bar.</p>
+                <p className="text-[11px] mt-2 pt-2 border-t border-border">On iPhone, use <strong className="text-foreground">Safari</strong> → Share → Add to Home Screen.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {isStandalone && (
+        <div className="mb-4 rounded-2xl bg-surface border border-border px-4 py-3 flex items-center gap-3">
+          <span className="text-success text-xl">✓</span>
+          <div>
+            <p className="font-medium text-sm">App installed</p>
+            <p className="text-xs text-muted">Running as installed app</p>
+          </div>
+        </div>
+      )}
 
       {/* Sign out */}
       <button

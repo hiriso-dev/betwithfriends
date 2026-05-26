@@ -3,11 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const nav = [
-  { href: "/home", icon: "🏠", label: "Home" },
-  { href: "/fixtures", icon: "⚽", label: "Fixtures" },
-  { href: "/groups", icon: "👥", label: "Groups" },
-  { href: "/special", icon: "🌟", label: "Special" },
-  { href: "/profile", icon: "👤", label: "Profile" },
+  { href: "/home",     icon: "🏠", label: "Home" },
+  { href: "/fixtures", icon: "⚽", label: "Games" },
+  { href: "/special",  icon: "🌟", label: "Special" },
+  { href: "/profile",  icon: "👤", label: "Profile" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +16,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-y-auto pb-nav">{children}</main>
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface/95 backdrop-blur-md pb-safe"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface/95 backdrop-blur-md"
         style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="mx-auto flex max-w-lg">
@@ -25,6 +24,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             const active =
               item.href === "/fixtures"
                 ? pathname === "/fixtures" || pathname.startsWith("/fixtures/") || pathname.startsWith("/teams/")
+                : item.href === "/profile"
+                ? pathname.startsWith("/profile") || pathname.startsWith("/groups")
                 : pathname.startsWith(item.href);
             return (
               <Link

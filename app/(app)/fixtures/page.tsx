@@ -45,6 +45,7 @@ function computeStandings(matches: Match[]): Standing[] {
 export default function FixturesPage() {
   const router = useRouter();
   const [allMatches, setAllMatches] = useState<Match[]>([]);
+  const [view, setView] = useState<"schedule" | "groups">("schedule");
   const [selectedWcGroup, setSelectedWcGroup] = useState("A");
   const [bettingGroupId, setBettingGroupId] = useState<string>("none");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -76,9 +77,6 @@ export default function FixturesPage() {
     loadMatches(bettingGroupId).then(setAllMatches).catch(() => {});
   }, [bettingGroupId, loadMatches, loading]);
 
-  const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup);
-  const standings = computeStandings(groupMatches);
-
   if (loading) {
     return (
       <div className="p-4 space-y-3">
@@ -88,113 +86,121 @@ export default function FixturesPage() {
     );
   }
 
+  const scheduleMatches = [...allMatches].sort((a, b) => a.match_date - b.match_date);
+  const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup).sort((a, b) => a.match_date - b.match_date);
+  const standings = computeStandings(groupMatches);
+
+  const groupBettingId = bettingGroupId !== "none" ? bettingGroupId : undefined;
+
   return (
     <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
-      {/* WC Group tabs */}
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        {WC_GROUPS.map(g => (
+      {/* View toggle + betting group selector */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex rounded-xl bg-surface border border-border p-0.5 shrink-0">
           <button
-            key={g}
-            onClick={() => setSelectedWcGroup(g)}
-            className={`shrink-0 h-9 w-9 rounded-xl text-sm font-bold transition ${
-              selectedWcGroup === g
-                ? "bg-accent text-[#0f0f23]"
-                : "bg-surface border border-border text-muted"
-            }`}
+            onClick={() => setView("schedule")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "schedule" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
           >
-            {g}
+            Schedule
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => setView("groups")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "groups" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+          >
+            Groups
+          </button>
+        </div>
 
-      {/* Betting group selector */}
-      {groups.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 text-sm">
-          <span className="text-muted shrink-0">Bets:</span>
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        {groups.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none flex-1 min-w-0">
             <button
               onClick={() => setBettingGroupId("none")}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                bettingGroupId === "none" ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"
-              }`}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${bettingGroupId === "none" ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
             >
-              None
+              No bets
             </button>
             {groups.map(g => (
-              <button
-                key={g.id}
-                onClick={() => setBettingGroupId(g.id)}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                  bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"
-                }`}
+              <button key={g.id} onClick={() => setBettingGroupId(g.id)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
               >
                 {g.name}
               </button>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Matches */}
-      <div className="space-y-3 mb-6">
-        {groupMatches.sort((a, b) => a.match_date - b.match_date).map(match => (
-          <MatchCard
-            key={match.id}
-            match={match}
-            groupId={bettingGroupId !== "none" ? bettingGroupId : undefined}
-            onBet={() => setBetTarget(match)}
-          />
-        ))}
-        {groupMatches.length === 0 && (
-          <div className="py-12 text-center text-muted text-sm">No matches in Group {selectedWcGroup}</div>
         )}
       </div>
 
-      {/* Group Standings */}
-      {standings.length > 0 && (
-        <div className="rounded-2xl border border-border bg-surface overflow-hidden mb-4">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="font-semibold text-sm">Group {selectedWcGroup} Standings</h2>
-          </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-muted border-b border-border">
-                <th className="px-3 py-2 text-left w-6">#</th>
-                <th className="px-3 py-2 text-left">Team</th>
-                <th className="px-2 py-2 text-center">P</th>
-                <th className="px-2 py-2 text-center">W</th>
-                <th className="px-2 py-2 text-center">D</th>
-                <th className="px-2 py-2 text-center">L</th>
-                <th className="px-2 py-2 text-center">GD</th>
-                <th className="px-2 py-2 text-center font-bold">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((s, i) => (
-                <tr
-                  key={s.code}
-                  className={`border-b border-border last:border-0 cursor-pointer active:bg-surface-hover transition ${i < 2 ? "bg-accent/5" : ""}`}
-                  onClick={() => router.push(`/teams/${s.code}`)}
-                >
-                  <td className="px-3 py-2.5">
-                    <span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className="font-semibold">{s.team}</span>
-                    <span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span>
-                  </td>
-                  <td className="px-2 py-2.5 text-center text-muted">{s.played}</td>
-                  <td className="px-2 py-2.5 text-center text-muted">{s.won}</td>
-                  <td className="px-2 py-2.5 text-center text-muted">{s.drawn}</td>
-                  <td className="px-2 py-2.5 text-center text-muted">{s.lost}</td>
-                  <td className="px-2 py-2.5 text-center text-muted">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
-                  <td className="px-2 py-2.5 text-center font-bold">{s.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="px-4 py-2 text-[10px] text-muted border-t border-border">Top 2 advance · Highlighted in blue</p>
+      {/* SCHEDULE VIEW — chronological all matches */}
+      {view === "schedule" && (
+        <div className="space-y-3">
+          {scheduleMatches.map(match => (
+            <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)} />
+          ))}
         </div>
+      )}
+
+      {/* GROUPS VIEW — WC group tabs + matches + standings */}
+      {view === "groups" && (
+        <>
+          <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {WC_GROUPS.map(g => (
+              <button key={g} onClick={() => setSelectedWcGroup(g)}
+                className={`shrink-0 h-9 w-9 rounded-xl text-sm font-bold transition ${selectedWcGroup === g ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3 mb-6">
+            {groupMatches.map(match => (
+              <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)} />
+            ))}
+            {groupMatches.length === 0 && (
+              <div className="py-12 text-center text-muted text-sm">No matches in Group {selectedWcGroup}</div>
+            )}
+          </div>
+
+          {standings.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface overflow-hidden mb-4">
+              <div className="px-4 py-3 border-b border-border">
+                <h2 className="font-semibold text-sm">Group {selectedWcGroup} Standings</h2>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted border-b border-border">
+                    <th className="px-3 py-2 text-left w-6">#</th>
+                    <th className="px-3 py-2 text-left">Team</th>
+                    <th className="px-2 py-2 text-center">P</th>
+                    <th className="px-2 py-2 text-center">W</th>
+                    <th className="px-2 py-2 text-center">D</th>
+                    <th className="px-2 py-2 text-center">L</th>
+                    <th className="px-2 py-2 text-center">GD</th>
+                    <th className="px-2 py-2 text-center font-bold">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings.map((s, i) => (
+                    <tr key={s.code}
+                      className={`border-b border-border last:border-0 cursor-pointer active:bg-surface-hover transition ${i < 2 ? "bg-accent/5" : ""}`}
+                      onClick={() => router.push(`/teams/${s.code}`)}
+                    >
+                      <td className="px-3 py-2.5"><span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span></td>
+                      <td className="px-3 py-2.5"><span className="font-semibold">{s.team}</span><span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span></td>
+                      <td className="px-2 py-2.5 text-center text-muted">{s.played}</td>
+                      <td className="px-2 py-2.5 text-center text-muted">{s.won}</td>
+                      <td className="px-2 py-2.5 text-center text-muted">{s.drawn}</td>
+                      <td className="px-2 py-2.5 text-center text-muted">{s.lost}</td>
+                      <td className="px-2 py-2.5 text-center text-muted">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
+                      <td className="px-2 py-2.5 text-center font-bold">{s.points}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="px-4 py-2 text-[10px] text-muted border-t border-border">Top 2 advance · Highlighted in blue</p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Bet sheet */}

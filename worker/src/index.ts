@@ -52,6 +52,10 @@ export default {
       const auth = await verifyJWT(token, env.JWT_SECRET);
       if (!auth) return err("Invalid token", 401, origin);
 
+      // Ensure the user still exists in DB (handles wiped/reset DB with old JWT)
+      const userExists = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(auth.userId).first();
+      if (!userExists) return err("Session expired — please log in again", 401, origin);
+
       if (pathname.startsWith("/api/groups")) {
         return await handleGroups(request, env, url, auth, json, err, origin);
       }
