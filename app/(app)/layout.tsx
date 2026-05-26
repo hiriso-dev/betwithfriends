@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 const nav = [
   { href: "/home",     icon: "🏠", label: "Home" },
@@ -15,7 +16,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-full flex-col">
-      <main className="flex-1 overflow-y-auto pb-nav">{children}</main>
+      <main id="scroll-main" className="relative flex-1 overflow-y-auto pb-nav">
+        <PullToRefresh scrollId="scroll-main" />
+        {children}
+      </main>
       <nav
         className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface/95 backdrop-blur-md"
         style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}

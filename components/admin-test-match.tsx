@@ -12,11 +12,17 @@ type TestMatch = {
   away_score: number | null;
 };
 
-function fmtCountdown(matchDate: number): string {
-  const diff = Math.floor((matchDate * 1000 - Date.now()) / 1000);
-  if (diff <= 0) return "locked";
-  if (diff < 60) return `${diff}s left to bet`;
-  return `${Math.floor(diff / 60)}m ${diff % 60}s left to bet`;
+const BET_LOCK_MINUTES = 0; // must match match-card.tsx and bets.ts
+
+function bettingSecondsLeft(matchDate: number): number {
+  const lockMs = matchDate * 1000 - BET_LOCK_MINUTES * 60 * 1000;
+  return Math.floor((lockMs - Date.now()) / 1000);
+}
+
+function fmtCountdown(secs: number): string {
+  if (secs <= 0) return "locked";
+  if (secs < 60) return `${secs}s left to bet`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s left to bet`;
 }
 
 function MatchRow({
@@ -41,8 +47,8 @@ function MatchRow({
   }, []);
 
   const isFinished = m.status === "finished";
-  const countdown = fmtCountdown(m.match_date);
-  const isLocked = countdown === "locked";
+  const secsLeft = bettingSecondsLeft(m.match_date);
+  const isLocked = secsLeft <= 0;
   const bettingOpen = !isLocked && !isFinished;
 
   async function run(fn: () => Promise<void>) {
@@ -84,7 +90,7 @@ function MatchRow({
               Step 1 — Place your bet
             </p>
             {bettingOpen ? (
-              <p className="text-xs text-warning font-semibold">⏱ {countdown}</p>
+              <p className="text-xs text-warning font-semibold">⏱ {fmtCountdown(secsLeft)}</p>
             ) : (
               <p className="text-xs text-muted">🔒 Betting closed</p>
             )}
@@ -151,7 +157,7 @@ function MatchRow({
 export function AdminTestMatch({ onMatchChange }: { onMatchChange: () => void }) {
   const [matches, setMatches] = useState<TestMatch[]>([]);
   const [creating, setCreating] = useState(false);
-  const [offsetMinutes, setOffsetMinutes] = useState(5);
+  const [offsetMinutes, setOffsetMinutes] = useState(10);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {

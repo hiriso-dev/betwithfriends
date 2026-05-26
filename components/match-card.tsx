@@ -85,7 +85,7 @@ export default function MatchCard({
   const now = Date.now();
   const kickoff = match.match_date * 1000;
   const minutesLeft = Math.floor((kickoff - now) / 60000);
-  const isLocked = minutesLeft <= 5 || match.status !== "scheduled";
+  const isLocked = minutesLeft <= 0 || match.status !== "scheduled";
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   const hasBet = !!match.my_bet;

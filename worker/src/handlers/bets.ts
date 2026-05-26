@@ -3,7 +3,7 @@ import { Env, AuthContext } from "../types";
 type JsonFn = (data: unknown, status?: number, origin?: string) => Response;
 type ErrFn = (msg: string, status?: number, origin?: string) => Response;
 
-const BET_LOCK_MINUTES = 5;
+const BET_LOCK_MINUTES = 0;
 const MAX_DOUBLE_UPS = 2;
 
 async function ensureBetColumns(env: Env): Promise<void> {

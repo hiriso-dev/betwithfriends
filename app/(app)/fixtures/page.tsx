@@ -59,6 +59,15 @@ export default function FixturesPage() {
   const [betTarget, setBetTarget] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const el = document.getElementById("scroll-main");
+    if (!el) return;
+    const onScroll = () => setShowScrollTop(el.scrollTop > 300);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
 
   const loadMatches = useCallback((groupId: string) => {
     const path = groupId !== "none" ? `/api/matches?group_id=${groupId}` : "/api/matches";
@@ -253,6 +262,17 @@ export default function FixturesPage() {
         </>
       )}
 
+      {/* Scroll to top */}
+      {showScrollTop && (
+        <button
+          onClick={() => document.getElementById("scroll-main")?.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-24 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface shadow-lg text-lg text-muted transition active:scale-90 active:text-accent"
+          aria-label="Scroll to top"
+        >
+          ↑
+        </button>
+      )}
+
       {/* Help dialog */}
       {helpOpen && <HelpDialog onClose={closeHelp} />}
 
@@ -309,7 +329,7 @@ function BetSheet({
   const [error, setError] = useState("");
 
   const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
-  const locked = minutesLeft <= 5 || match.status !== "scheduled";
+  const locked = minutesLeft <= 0 || match.status !== "scheduled";
 
   // How many double ups are still available (editing: if already set, it's still "used" by this bet)
   const alreadyDoubleUp = match.my_bet?.double_up === 1;
