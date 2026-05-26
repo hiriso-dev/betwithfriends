@@ -75,6 +75,13 @@ export default {
         return await handleStandings(request, env, url, auth, json, err, origin);
       }
 
+      // Dev: manually trigger a competition sync (requires API key — use for UCL/other real match testing)
+      if (pathname === "/api/dev/sync" && request.method === "POST" && env.FOOTBALL_DATA_API_KEY) {
+        const { competition = "WC" } = await request.json<{ competition?: string }>();
+        await syncScores(env, competition);
+        return json({ ok: true, competition }, 200, origin);
+      }
+
       // Dev-only: trigger scoring for a specific match
       if (pathname === "/api/dev/score-match" && request.method === "POST" && !env.FOOTBALL_DATA_API_KEY) {
         const { match_id, home_score, away_score } = await request.json<{ match_id: string; home_score: number; away_score: number }>();

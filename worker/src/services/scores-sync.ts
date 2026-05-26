@@ -3,7 +3,6 @@ import { processMatchResult } from "./scoring";
 import { sendMatchResultNotifications } from "./push-service";
 
 const FOOTBALL_DATA_URL = "https://api.football-data.org/v4";
-const WC_COMPETITION_CODE = "WC";
 
 type FDMatch = {
   id: number;
@@ -40,7 +39,9 @@ function mapStatus(fdStatus: string): Match["status"] {
 function mapStage(stage: string): string {
   const map: Record<string, string> = {
     GROUP_STAGE: "Group Stage",
+    LAST_32: "Round of 32",   // WC2026 first knockout round (48 teams)
     ROUND_OF_16: "Round of 16",
+    LAST_16: "Round of 16",
     QUARTER_FINALS: "Quarter-finals",
     SEMI_FINALS: "Semi-finals",
     THIRD_PLACE: "3rd Place",
@@ -49,13 +50,13 @@ function mapStage(stage: string): string {
   return map[stage] ?? stage;
 }
 
-export async function syncScores(env: Env): Promise<void> {
+export async function syncScores(env: Env, competitionCode = "WC"): Promise<void> {
   if (!env.FOOTBALL_DATA_API_KEY) {
     console.log("syncScores: no API key set, skipping");
     return;
   }
   try {
-    const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${WC_COMPETITION_CODE}/matches`, {
+    const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${competitionCode}/matches`, {
       headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY },
     });
 
@@ -80,13 +81,26 @@ export async function syncScores(env: Env): Promise<void> {
       if (existing) {
         const justFinished = existing.status !== "finished" && status === "finished";
 
+        // Always update team names/codes and match_date — knockout matches start with
+        // placeholder teams ("Winner Group A") and get real names as groups finish.
+        // Matches can also be rescheduled, which would break bet-locking if date is stale.
         await env.DB.prepare(`
           UPDATE matches SET
+            home_team = ?, away_team = ?,
+            home_team_code = ?, away_team_code = ?,
+            match_date = ?,
             status = ?, home_score = ?, away_score = ?,
             stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
             updated_at = unixepoch()
           WHERE api_match_id = ?
-        `).bind(status, homeScore, awayScore, m.venue ?? null, m.area?.name ?? null, String(m.id)).run();
+        `).bind(
+          m.homeTeam.name, m.awayTeam.name,
+          m.homeTeam.tla, m.awayTeam.tla,
+          matchDate,
+          status, homeScore, awayScore,
+          m.venue ?? null, m.area?.name ?? null,
+          String(m.id)
+        ).run();
 
         if (justFinished && homeScore !== null && awayScore !== null) {
           const fullMatch: Match = { ...existing as unknown as Match, status, home_score: homeScore, away_score: awayScore };
@@ -94,18 +108,30 @@ export async function syncScores(env: Env): Promise<void> {
           await sendMatchResultNotifications(env, fullMatch);
         }
       } else {
+        const newId = crypto.randomUUID();
         await env.DB.prepare(`
           INSERT INTO matches (id, api_match_id, home_team, away_team, home_team_code, away_team_code,
             match_date, home_score, away_score, status, stage, group_name, stadium, venue_city)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-          crypto.randomUUID(), String(m.id),
+          newId, String(m.id),
           m.homeTeam.name, m.awayTeam.name,
           m.homeTeam.tla, m.awayTeam.tla,
           matchDate, homeScore, awayScore,
           status, mapStage(m.stage), m.group,
           m.venue ?? null, m.area?.name ?? null
         ).run();
+
+        // Handle the case where the worker first sees a match that is already finished
+        // (e.g. after a cold start or missed sync window).
+        if (status === "finished" && homeScore !== null && awayScore !== null) {
+          const inserted = await env.DB.prepare("SELECT * FROM matches WHERE id = ?")
+            .bind(newId).first<Match>();
+          if (inserted) {
+            await processMatchResult(env, inserted);
+            await sendMatchResultNotifications(env, inserted);
+          }
+        }
       }
     }
   } catch (e) {
@@ -125,7 +151,7 @@ export async function syncScorers(env: Env): Promise<void> {
   if (recent?.last && recent.last > Math.floor(Date.now() / 1000) - SCORERS_INTERVAL) return;
 
   try {
-    const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${WC_COMPETITION_CODE}/scorers`, {
+    const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/WC/scorers`, {
       headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY },
     });
     if (!res.ok) return;

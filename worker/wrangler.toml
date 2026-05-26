@@ -12,7 +12,7 @@ database_name = "betwithfriends"
 database_id = "75789eae-d657-4600-8edb-4990f0ec126b"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 [dev]
 port = 8787
