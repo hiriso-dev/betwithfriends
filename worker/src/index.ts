@@ -7,7 +7,6 @@ import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { handleStandings } from "./handlers/standings";
 import { syncScores, syncScorers } from "./services/scores-sync";
-import { syncOdds } from "./services/odds-sync";
 import { processMatchResult } from "./services/scoring";
 import { sendPreGameReminders } from "./services/push-service";
 
@@ -92,7 +91,6 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    await syncOdds(env);
     await syncScores(env);
     await syncScorers(env);
     await sendPreGameReminders(env);

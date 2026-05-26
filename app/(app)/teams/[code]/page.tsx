@@ -108,7 +108,7 @@ export default function TeamPage() {
           const myScore = isHome ? m.home_score : m.away_score;
           const theirScore = isHome ? m.away_score : m.home_score;
           const result = !isFinished || myScore === null ? null : myScore > theirScore! ? "W" : myScore < theirScore! ? "L" : "D";
-          const resultColor = { W: "text-success", D: "text-warning", L: "text-danger" }[result ?? ""] ?? "";
+          const resultColor = result ? ({ W: "text-success", D: "text-warning", L: "text-danger" } as Record<string, string>)[result] ?? "" : "";
 
           return (
             <div key={m.id} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">

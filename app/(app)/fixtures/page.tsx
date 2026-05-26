@@ -15,8 +15,7 @@ type Match = {
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string; group_name: string | null;
   stadium: string | null; venue_city: string | null;
-  home_odds: number | null; draw_odds: number | null; away_odds: number | null;
-  my_bet?: { home_score_pred: number; away_score_pred: number; points_earned: number | null; cote_applied: number | null };
+  my_bet?: { home_score_pred: number; away_score_pred: number; points_earned: number | null; confidence: string | null; double_up: number };
 };
 
 type Standing = { team: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; gd: number; points: number };
@@ -199,29 +198,66 @@ export default function FixturesPage() {
       )}
 
       {/* Bet sheet */}
-      {betTarget && (
-        <BetSheet
-          match={betTarget}
-          groupId={bettingGroupId !== "none" ? bettingGroupId : groups[0]?.id}
-          onClose={() => setBetTarget(null)}
-          onSaved={() => {
-            setBetTarget(null);
-            loadMatches(bettingGroupId).then(setAllMatches).catch(() => {});
-          }}
-        />
-      )}
+      {betTarget && (() => {
+        const doubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
+        return (
+          <BetSheet
+            match={betTarget}
+            groupId={bettingGroupId !== "none" ? bettingGroupId : groups[0]?.id}
+            doubleUpsUsed={doubleUpsUsed}
+            onClose={() => setBetTarget(null)}
+            onSaved={() => {
+              setBetTarget(null);
+              loadMatches(bettingGroupId).then(setAllMatches).catch(() => {});
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
 
-function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId: string | undefined; onClose: () => void; onSaved: () => void }) {
+const CONFIDENCE_OPTIONS = [
+  { value: null,        label: "None",     emoji: "—",  pts: { correct: 0, wrong: 0 } },
+  { value: "cautious",  label: "Cautious", emoji: "😬", pts: { correct: 2, wrong: -2 } },
+  { value: "confident", label: "Confident",emoji: "👍", pts: { correct: 5, wrong: -5 } },
+  { value: "reckless",  label: "Reckless", emoji: "🔥", pts: { correct: 10, wrong: -10 } },
+];
+
+function calcPreview(confidence: string | null, doubleUp: boolean) {
+  const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
+  let correct = 10 + c.pts.correct;
+  let wrong = c.pts.wrong;
+  if (doubleUp && correct > 0) correct *= 2;
+  if (doubleUp && wrong < 0) wrong *= 2;
+  return { correctMin: correct, wrong };
+}
+
+function BetSheet({
+  match, groupId, doubleUpsUsed, onClose, onSaved,
+}: {
+  match: Match;
+  groupId: string | undefined;
+  doubleUpsUsed: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [home, setHome] = useState(match.my_bet?.home_score_pred ?? 0);
   const [away, setAway] = useState(match.my_bet?.away_score_pred ?? 0);
+  const [confidence, setConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
+  const [doubleUp, setDoubleUp] = useState(match.my_bet?.double_up === 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
   const locked = minutesLeft <= 5 || match.status !== "scheduled";
+
+  // How many double ups are still available (editing: if already set, it's still "used" by this bet)
+  const alreadyDoubleUp = match.my_bet?.double_up === 1;
+  const doubleUpsRemaining = 2 - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
+  const canDoubleUp = doubleUp || doubleUpsRemaining > 0;
+
+  const preview = calcPreview(confidence, doubleUp);
 
   async function save() {
     if (!groupId) { setError("Select a betting group first"); return; }
@@ -229,7 +265,7 @@ function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId:
     try {
       await apiFetch("/api/bets", {
         method: "POST",
-        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away }),
+        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away, confidence, double_up: doubleUp }),
       });
       if (navigator.vibrate) navigator.vibrate(50);
       onSaved();
@@ -238,12 +274,10 @@ function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId:
     } finally { setSaving(false); }
   }
 
-  const predOutcome = home > away ? "home" : home < away ? "away" : "draw";
-
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl">
+      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
         <div className="mb-4 mt-3 text-center">
           <p className="text-xs text-muted uppercase tracking-widest">
@@ -261,26 +295,77 @@ function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId:
           {locked && <p className="mt-1 text-xs text-danger">🔒 Betting closed</p>}
         </div>
 
-        {/* Odds preview */}
-        {(match.home_odds || match.draw_odds || match.away_odds) && (
-          <div className="mb-4 flex justify-center gap-4 text-xs">
-            {[
-              { label: match.home_team_code, val: match.home_odds, outcome: "home" },
-              { label: "Draw", val: match.draw_odds, outcome: "draw" },
-              { label: match.away_team_code, val: match.away_odds, outcome: "away" },
-            ].map(({ label, val, outcome }) => (
-              <div key={outcome} className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition ${predOutcome === outcome ? "bg-accent/20 text-accent" : "bg-surface-hover text-muted"}`}>
-                <span className="font-bold">{val ?? "—"}×</span>
-                <span className="text-[10px]">{label}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Score inputs */}
         <div className="mb-6 flex items-center justify-center gap-6">
           <ScoreInput label={match.home_team} value={home} onChange={setHome} disabled={locked} />
           <span className="text-2xl font-bold text-muted">-</span>
           <ScoreInput label={match.away_team} value={away} onChange={setAway} disabled={locked} />
+        </div>
+
+        {/* Confidence selector */}
+        <div className="mb-4">
+          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence</p>
+          <div className="grid grid-cols-4 gap-2">
+            {CONFIDENCE_OPTIONS.map(opt => (
+              <button
+                key={String(opt.value)}
+                disabled={locked}
+                onClick={() => setConfidence(opt.value)}
+                className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition ${
+                  confidence === opt.value
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-border bg-surface-hover text-muted"
+                } disabled:opacity-40`}
+              >
+                <span className="text-lg leading-none">{opt.emoji}</span>
+                <span className="font-medium">{opt.label}</span>
+                {opt.value && (
+                  <span className="text-[10px] opacity-70">
+                    {opt.pts.correct > 0 ? `+${opt.pts.correct}` : opt.pts.correct}/{opt.pts.wrong}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Double Up toggle */}
+        <div className="mb-4">
+          <button
+            disabled={locked || (!canDoubleUp)}
+            onClick={() => setDoubleUp(v => !v)}
+            className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition ${
+              doubleUp ? "border-accent bg-accent/10" : "border-border bg-surface-hover"
+            } disabled:opacity-40`}
+          >
+            <div className="text-left">
+              <p className={`font-semibold text-sm ${doubleUp ? "text-accent" : "text-foreground"}`}>
+                🎲 Double Up
+              </p>
+              <p className="text-[10px] text-muted">×2 points if total is positive</p>
+            </div>
+            <div className="text-right">
+              <p className={`text-xs font-medium ${doubleUp ? "text-accent" : "text-muted"}`}>
+                {doubleUpsRemaining} remaining
+              </p>
+            </div>
+          </button>
+        </div>
+
+        {/* Scoring preview */}
+        <div className="mb-5 flex gap-2 text-xs">
+          <div className="flex-1 rounded-xl bg-success/10 border border-success/20 p-3 text-center">
+            <p className="text-muted mb-0.5">If correct</p>
+            <p className="font-bold text-success text-base">+{preview.correctMin} pts</p>
+            <p className="text-[10px] text-muted">+{doubleUp ? preview.correctMin + 10 : preview.correctMin + 5} if exact</p>
+          </div>
+          <div className="flex-1 rounded-xl bg-danger/10 border border-danger/20 p-3 text-center">
+            <p className="text-muted mb-0.5">If wrong</p>
+            <p className={`font-bold text-base ${preview.wrong < 0 ? "text-danger" : "text-muted"}`}>
+              {preview.wrong < 0 ? preview.wrong : "0"} pts
+            </p>
+            <p className="text-[10px] text-muted">{preview.wrong < 0 ? "confidence penalty" : "no penalty"}</p>
+          </div>
         </div>
 
         {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}

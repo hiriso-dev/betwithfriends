@@ -15,15 +15,19 @@ type Match = {
   group_name: string | null;
   stadium: string | null;
   venue_city: string | null;
-  home_odds: number | null;
-  draw_odds: number | null;
-  away_odds: number | null;
   my_bet?: {
     home_score_pred: number;
     away_score_pred: number;
     points_earned: number | null;
-    cote_applied: number | null;
+    confidence: string | null;
+    double_up: number;
   };
+};
+
+const CONFIDENCE_EMOJI: Record<string, string> = {
+  cautious: "😬",
+  confident: "👍",
+  reckless: "🔥",
 };
 
 function fmtTime(ts: number): string {
@@ -60,14 +64,12 @@ export default function MatchCard({
     if (hp === hr && ap === ar) return "exact";
     const predResult = hp > ap ? "home" : hp < ap ? "away" : "draw";
     const actResult = hr > ar ? "home" : hr < ar ? "away" : "draw";
-    if (predResult === actResult) return hp - ap === hr - ar ? "diff" : "result";
+    if (predResult === actResult) return "result";
     return "wrong";
   })();
 
-  const resultColor = { exact: "text-success", diff: "text-success", result: "text-warning", wrong: "text-danger", null: "text-muted" }[betResult ?? "null"];
-  const resultLabel = { exact: "⭐ Exact!", diff: "✓ Correct +diff", result: "✓ Correct result", wrong: "✗ Wrong", null: "" }[betResult ?? "null"];
-
-  const showOdds = !isFinished && !isLive && (match.home_odds || match.draw_odds || match.away_odds);
+  const resultColor = { exact: "text-success", result: "text-warning", wrong: "text-danger", null: "text-muted" }[betResult ?? "null"];
+  const resultLabel = { exact: "⭐ Exact!", result: "✓ Correct result", wrong: "✗ Wrong", null: "" }[betResult ?? "null"];
 
   return (
     <div
@@ -106,15 +108,6 @@ export default function MatchCard({
         </span>
       </div>
 
-      {/* Odds row */}
-      {showOdds && (
-        <div className="mb-2 flex gap-3 text-[10px] text-muted">
-          <span>H {match.home_odds}×</span>
-          <span>D {match.draw_odds}×</span>
-          <span>A {match.away_odds}×</span>
-        </div>
-      )}
-
       {/* Teams + Score */}
       <div className="flex items-center justify-between gap-2">
         <button
@@ -149,11 +142,17 @@ export default function MatchCard({
         <div className="mt-3 pt-3 border-t border-border">
           {hasBet ? (
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-1.5 text-muted">
+              <div className="flex items-center gap-1.5 text-muted flex-wrap">
                 <span>Your bet:</span>
                 <span className="font-semibold text-foreground">
                   {match.my_bet!.home_score_pred} – {match.my_bet!.away_score_pred}
                 </span>
+                {match.my_bet!.confidence && (
+                  <span className="text-base">{CONFIDENCE_EMOJI[match.my_bet!.confidence]}</span>
+                )}
+                {match.my_bet!.double_up === 1 && (
+                  <span className="text-xs bg-accent/15 text-accent rounded px-1">×2</span>
+                )}
                 {!isLocked && !isFinished && (
                   <span className="text-xs text-accent underline cursor-pointer" onClick={(e) => { e.stopPropagation(); onBet(); }}>
                     edit
@@ -163,11 +162,8 @@ export default function MatchCard({
               <div className="flex flex-col items-end gap-0.5">
                 {isFinished && match.my_bet?.points_earned !== null && (
                   <span className={`font-bold text-sm ${resultColor}`}>
-                    {match.my_bet!.points_earned! > 0 ? `+${match.my_bet!.points_earned!.toFixed(1)}pts` : "0pts"}
+                    {(match.my_bet!.points_earned! > 0 ? "+" : "") + match.my_bet!.points_earned!.toFixed(1) + "pts"}
                   </span>
-                )}
-                {isFinished && match.my_bet?.cote_applied && (
-                  <span className="text-[10px] text-muted">{match.my_bet.cote_applied}×</span>
                 )}
                 {isFinished && betResult && (
                   <span className={`text-xs ${resultColor}`}>{resultLabel}</span>

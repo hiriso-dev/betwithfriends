@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir -p /Users/jerome/Documents/betwithfriends/app/\\\\\\(app\\\\\\)/teams/\\\\[code\\\\])"
+      "Bash(mkdir -p /Users/jerome/Documents/betwithfriends/app/\\\\\\(app\\\\\\)/teams/\\\\[code\\\\])",
+      "Bash(npx tsc *)",
+      "Bash(wrangler d1 *)"
     ],
     "additionalDirectories": [
       "/Users/jerome/Documents/betwithfriends/app/(app)/teams"

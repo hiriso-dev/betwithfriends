@@ -40,10 +40,6 @@ CREATE TABLE IF NOT EXISTS matches (
   status TEXT DEFAULT 'scheduled',
   stage TEXT,
   group_name TEXT,
-  home_odds REAL,
-  draw_odds REAL,
-  away_odds REAL,
-  odds_updated_at INTEGER,
   stadium TEXT,
   venue_city TEXT,
   updated_at INTEGER DEFAULT (unixepoch())
@@ -68,8 +64,9 @@ CREATE TABLE IF NOT EXISTS bets (
   match_id TEXT NOT NULL REFERENCES matches(id),
   home_score_pred INTEGER NOT NULL,
   away_score_pred INTEGER NOT NULL,
+  confidence TEXT,
+  double_up INTEGER DEFAULT 0,
   points_earned REAL,
-  cote_applied REAL,
   created_at INTEGER DEFAULT (unixepoch()),
   updated_at INTEGER DEFAULT (unixepoch()),
   UNIQUE(user_id, group_id, match_id)

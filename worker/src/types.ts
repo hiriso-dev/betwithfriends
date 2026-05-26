@@ -3,7 +3,6 @@ export interface Env {
   JWT_SECRET: string;
   APP_URL: string;
   FOOTBALL_DATA_API_KEY?: string;
-  ODDS_API_KEY?: string;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
@@ -53,8 +52,9 @@ export type Bet = {
   match_id: string;
   home_score_pred: number;
   away_score_pred: number;
+  confidence: "cautious" | "confident" | "reckless" | null;
+  double_up: number;
   points_earned: number | null;
-  cote_applied: number | null;
   created_at: number;
   updated_at: number;
 };

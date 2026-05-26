@@ -12,8 +12,7 @@ type Match = {
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string; group_name: string | null;
   stadium: string | null; venue_city: string | null;
-  home_odds: number | null; draw_odds: number | null; away_odds: number | null;
-  my_bet?: { home_score_pred: number; away_score_pred: number; points_earned: number | null; cote_applied: number | null };
+  my_bet?: { home_score_pred: number; away_score_pred: number; points_earned: number | null; confidence: string | null; double_up: number };
 };
 
 type Group = { id: string; name: string; my_points: number; my_rank: number; member_count: number };
@@ -120,15 +119,6 @@ export default function HomePage() {
             <p className="mb-3 text-center text-[10px] text-muted">Group {featured.group_name}{featured.stadium ? ` · ${featured.stadium}` : ""}</p>
           )}
 
-          {/* Odds preview */}
-          {(featured.home_odds || featured.draw_odds || featured.away_odds) && (
-            <div className="mb-3 flex justify-center gap-3 text-xs text-muted">
-              <span>H {featured.home_odds}×</span>
-              <span>D {featured.draw_odds}×</span>
-              <span>A {featured.away_odds}×</span>
-            </div>
-          )}
-
           {nextUnbet && featured.my_bet === undefined ? (
             <button
               onClick={() => setBetTarget(featured)}
@@ -210,35 +200,59 @@ export default function HomePage() {
       )}
 
       {/* Bet sheet */}
-      {betTarget && (
-        <BetSheet
-          match={betTarget}
-          groupId={selectedGroup || groups[0]?.id}
-          onClose={() => setBetTarget(null)}
-          onSaved={() => {
-            setBetTarget(null);
-            apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
-          }}
-        />
-      )}
+      {betTarget && (() => {
+        const doubleUpsUsed = matches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
+        return (
+          <BetSheet
+            match={betTarget}
+            groupId={selectedGroup || groups[0]?.id}
+            doubleUpsUsed={doubleUpsUsed}
+            onClose={() => setBetTarget(null)}
+            onSaved={() => {
+              setBetTarget(null);
+              apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
 
-function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId: string; onClose: () => void; onSaved: () => void }) {
+const CONFIDENCE_OPTIONS = [
+  { value: null,        label: "None",     emoji: "—",  pts: { correct: 0, wrong: 0 } },
+  { value: "cautious",  label: "Cautious", emoji: "😬", pts: { correct: 2, wrong: -2 } },
+  { value: "confident", label: "Confident",emoji: "👍", pts: { correct: 5, wrong: -5 } },
+  { value: "reckless",  label: "Reckless", emoji: "🔥", pts: { correct: 10, wrong: -10 } },
+];
+
+function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
+  match: Match; groupId: string; doubleUpsUsed: number; onClose: () => void; onSaved: () => void;
+}) {
   const [home, setHome] = useState(match.my_bet?.home_score_pred ?? 0);
   const [away, setAway] = useState(match.my_bet?.away_score_pred ?? 0);
+  const [confidence, setConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
+  const [doubleUp, setDoubleUp] = useState(match.my_bet?.double_up === 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
   const locked = minutesLeft <= 5 || match.status !== "scheduled";
+
+  const alreadyDoubleUp = match.my_bet?.double_up === 1;
+  const doubleUpsRemaining = 2 - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
+
+  const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
+  let previewCorrect = 10 + c.pts.correct;
+  let previewWrong = c.pts.wrong;
+  if (doubleUp && previewCorrect > 0) previewCorrect *= 2;
+  if (doubleUp && previewWrong < 0) previewWrong *= 2;
 
   async function save() {
     setSaving(true); setError("");
     try {
       await apiFetch("/api/bets", {
         method: "POST",
-        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away }),
+        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away, confidence, double_up: doubleUp }),
       });
       if (navigator.vibrate) navigator.vibrate(50);
       onSaved();
@@ -250,31 +264,95 @@ function BetSheet({ match, groupId, onClose, onSaved }: { match: Match; groupId:
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl">
+      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
-        <h3 className="mt-3 mb-4 text-center text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
-        <div className="mb-6 flex items-center justify-center gap-6">
-          {[
-            { label: match.home_team, value: home, onChange: setHome },
-            { label: match.away_team, value: away, onChange: setAway },
-          ].reduce<React.ReactNode[]>((acc, item, i) => {
-            if (i > 0) acc.push(<span key="sep" className="text-2xl font-bold text-muted">-</span>);
-            acc.push(
-              <div key={item.label} className="flex flex-col items-center gap-2">
-                <p className="text-xs text-muted max-w-[80px] truncate text-center">{item.label}</p>
-                <button onClick={() => item.onChange(Math.min(20, item.value + 1))} disabled={locked} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30">+</button>
-                <span className="text-4xl font-bold w-12 text-center">{item.value}</span>
-                <button onClick={() => item.onChange(Math.max(0, item.value - 1))} disabled={locked} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30">−</button>
-              </div>
-            );
-            return acc;
-          }, [])}
+        <div className="mb-4 mt-3 text-center">
+          <h3 className="text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
+          <p className="mt-1 text-xs text-muted">
+            {new Date(match.match_date * 1000).toLocaleString("en-US", {
+              weekday: "short", month: "short", day: "numeric",
+              hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+            })}
+          </p>
+          {!locked && minutesLeft < 60 && <p className="mt-1 text-xs text-warning">⚡ Locks in {minutesLeft}m</p>}
         </div>
+
+        <div className="mb-6 flex items-center justify-center gap-6">
+          <ScoreInput label={match.home_team} value={home} onChange={setHome} disabled={locked} />
+          <span className="text-2xl font-bold text-muted">-</span>
+          <ScoreInput label={match.away_team} value={away} onChange={setAway} disabled={locked} />
+        </div>
+
+        {/* Confidence */}
+        <div className="mb-4">
+          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence</p>
+          <div className="grid grid-cols-4 gap-2">
+            {CONFIDENCE_OPTIONS.map(opt => (
+              <button
+                key={String(opt.value)}
+                disabled={locked}
+                onClick={() => setConfidence(opt.value)}
+                className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition ${
+                  confidence === opt.value ? "border-accent bg-accent/10 text-accent" : "border-border bg-surface-hover text-muted"
+                } disabled:opacity-40`}
+              >
+                <span className="text-lg leading-none">{opt.emoji}</span>
+                <span className="font-medium">{opt.label}</span>
+                {opt.value && <span className="text-[10px] opacity-70">+{opt.pts.correct}/{opt.pts.wrong}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Double Up */}
+        <div className="mb-4">
+          <button
+            disabled={locked || (!doubleUp && doubleUpsRemaining <= 0)}
+            onClick={() => setDoubleUp(v => !v)}
+            className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition ${
+              doubleUp ? "border-accent bg-accent/10" : "border-border bg-surface-hover"
+            } disabled:opacity-40`}
+          >
+            <div className="text-left">
+              <p className={`font-semibold text-sm ${doubleUp ? "text-accent" : "text-foreground"}`}>🎲 Double Up</p>
+              <p className="text-[10px] text-muted">×2 points if total is positive</p>
+            </div>
+            <p className={`text-xs font-medium ${doubleUp ? "text-accent" : "text-muted"}`}>{doubleUpsRemaining} remaining</p>
+          </button>
+        </div>
+
+        {/* Preview */}
+        <div className="mb-5 flex gap-2 text-xs">
+          <div className="flex-1 rounded-xl bg-success/10 border border-success/20 p-3 text-center">
+            <p className="text-muted mb-0.5">If correct</p>
+            <p className="font-bold text-success text-base">+{previewCorrect} pts</p>
+            <p className="text-[10px] text-muted">+{doubleUp ? previewCorrect + 10 : previewCorrect + 5} if exact</p>
+          </div>
+          <div className="flex-1 rounded-xl bg-danger/10 border border-danger/20 p-3 text-center">
+            <p className="text-muted mb-0.5">If wrong</p>
+            <p className={`font-bold text-base ${previewWrong < 0 ? "text-danger" : "text-muted"}`}>
+              {previewWrong < 0 ? previewWrong : "0"} pts
+            </p>
+            <p className="text-[10px] text-muted">{previewWrong < 0 ? "confidence penalty" : "no penalty"}</p>
+          </div>
+        </div>
+
         {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}
         <button onClick={save} disabled={saving || locked} className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50">
           {saving ? "Saving…" : locked ? "Locked" : "Save prediction"}
         </button>
       </div>
     </>
+  );
+}
+
+function ScoreInput({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <p className="text-xs text-muted max-w-[80px] truncate text-center">{label}</p>
+      <button onClick={() => onChange(Math.min(20, value + 1))} disabled={disabled} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30 transition active:scale-90">+</button>
+      <span className="text-4xl font-bold w-12 text-center">{value}</span>
+      <button onClick={() => onChange(Math.max(0, value - 1))} disabled={disabled} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30 transition active:scale-90">−</button>
+    </div>
   );
 }

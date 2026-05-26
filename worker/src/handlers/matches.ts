@@ -27,7 +27,7 @@ export async function handleMatches(
       // Matches with user's bets for this group
       const rows = await env.DB.prepare(`
         SELECT m.*,
-               b.home_score_pred, b.away_score_pred, b.points_earned, b.cote_applied
+               b.home_score_pred, b.away_score_pred, b.points_earned, b.confidence, b.double_up
         FROM matches m
         LEFT JOIN bets b ON b.match_id = m.id AND b.user_id = ? AND b.group_id = ?
         ORDER BY m.match_date ASC
@@ -36,12 +36,13 @@ export async function handleMatches(
       return json(rows.results.map((r: Record<string, unknown>) => ({
         ...r,
         my_bet: r.home_score_pred !== null
-          ? { home_score_pred: r.home_score_pred, away_score_pred: r.away_score_pred, points_earned: r.points_earned, cote_applied: r.cote_applied }
+          ? { home_score_pred: r.home_score_pred, away_score_pred: r.away_score_pred, points_earned: r.points_earned, confidence: r.confidence, double_up: r.double_up }
           : undefined,
         home_score_pred: undefined,
         away_score_pred: undefined,
         points_earned: undefined,
-        cote_applied: undefined,
+        confidence: undefined,
+        double_up: undefined,
       })), 200, origin);
     }
 
