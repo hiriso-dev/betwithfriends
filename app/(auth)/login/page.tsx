@@ -23,7 +23,7 @@ export default function LoginPage() {
       });
 
       document.cookie = `bwf_token=${data.jwt}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
-      router.replace("/fixtures");
+      router.replace("/home");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
     } finally {

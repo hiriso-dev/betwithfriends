@@ -86,6 +86,36 @@ export default function HomePage() {
     );
   }
 
+  // No groups — show onboarding
+  if (!loading && groups.length === 0) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center px-6 text-center">
+        <div className="mb-4 text-7xl">⚽</div>
+        <h1 className="mb-2 text-2xl font-bold">Welcome to BetWithFriends!</h1>
+        <p className="mb-2 text-sm text-muted max-w-xs">
+          World Cup 2026 is almost here. Bet on every match with your friends and see who knows football best.
+        </p>
+        <p className="mb-8 text-sm text-muted max-w-xs">
+          Start by creating a group — then invite your crew with a link.
+        </p>
+        <div className="w-full max-w-xs flex flex-col gap-3">
+          <button
+            onClick={() => router.push("/groups/new")}
+            className="w-full rounded-2xl bg-accent py-4 font-bold text-[#0f0f23] text-base transition active:scale-95"
+          >
+            🏆 Create a group
+          </button>
+          <button
+            onClick={() => router.push("/groups/join")}
+            className="w-full rounded-2xl border border-border py-4 font-semibold text-foreground transition active:bg-surface-hover"
+          >
+            Join with invite code
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
       <div className="mb-4 flex items-center justify-between">
