@@ -306,9 +306,8 @@ const CONFIDENCE_OPTIONS = [
 function calcPreview(confidence: string | null, doubleUp: boolean) {
   const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
   let correct = 10 + c.pts.correct;
-  let wrong = c.pts.wrong;
+  const wrong = c.pts.wrong;
   if (doubleUp && correct > 0) correct *= 2;
-  if (doubleUp && wrong < 0) wrong *= 2;
   return { correctMin: correct, wrong };
 }
 

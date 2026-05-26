@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
@@ -41,6 +41,18 @@ function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString("en-US", {
     hour: "2-digit", minute: "2-digit", timeZoneName: "short",
   });
+}
+
+function fmtCountdown(secs: number): string {
+  if (secs <= 0) return "";
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function TapScore({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -100,6 +112,14 @@ export default function MatchCard({
   const [qDoubleUp, setQDoubleUp] = useState((match.my_bet?.double_up ?? 0) === 1);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+
+  const fastRefresh = secondsLeft < 300;
+  useEffect(() => {
+    if (isLocked) return;
+    const id = setInterval(() => setTick(n => n + 1), fastRefresh ? 1000 : 60000);
+    return () => clearInterval(id);
+  }, [isLocked, fastRefresh]);
 
   function enterEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
@@ -256,7 +276,7 @@ export default function MatchCard({
               </span>
             ))}
             <span className="mx-0.5 text-border">|</span>
-            <span className={qDoubleUp ? "text-accent font-semibold" : ""}>×2 all pts</span>
+            <span className={qDoubleUp ? "text-accent font-semibold" : ""}>×2 if positive</span>
           </div>
 
           {/* Save + Cancel + Help */}
@@ -267,9 +287,16 @@ export default function MatchCard({
             <button
               onClick={saveQuick}
               disabled={saving}
-              className="flex-1 rounded-xl bg-accent py-3 font-bold text-[#0f0f23] text-sm transition active:scale-95 disabled:opacity-50"
+              className="flex-1 rounded-xl bg-accent py-2 font-bold text-[#0f0f23] text-sm transition active:scale-95 disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save bet"}
+              {saving ? "Saving…" : (
+                <>
+                  <span className="block">Save bet</span>
+                  {secondsLeft > 0 && (
+                    <span className="block text-[10px] font-normal opacity-60">⏱ {fmtCountdown(secondsLeft)}</span>
+                  )}
+                </>
+              )}
             </button>
             {hasBet && (
               <button

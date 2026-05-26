@@ -11,7 +11,8 @@
       "Bash(curl -s -X OPTIONS http://localhost:8787/api/auth/login -H 'Origin: http://localhost:3000' -H 'Access-Control-Request-Method: POST' -D - -o /dev/null)",
       "Bash(cd /Users/jerome/Documents/betwithfriends && npm run worker:dev > /tmp/worker-dev.log 2>&1 & *)",
       "Read(//tmp/**)",
-      "Bash(node -e \"require\\('jimp'\\)\")"
+      "Bash(node -e \"require\\('jimp'\\)\")",
+      "Bash(identify /Users/jerome/Documents/betwithfriends/public/favicon_bwf.png)"
     ],
     "additionalDirectories": [
       "/Users/jerome/Documents/betwithfriends/app/(app)/teams"

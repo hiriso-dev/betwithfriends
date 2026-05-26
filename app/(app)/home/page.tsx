@@ -374,9 +374,8 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
 
   const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
   let previewCorrect = 10 + c.pts.correct;
-  let previewWrong = c.pts.wrong;
+  const previewWrong = c.pts.wrong;
   if (doubleUp && previewCorrect > 0) previewCorrect *= 2;
-  if (doubleUp && previewWrong < 0) previewWrong *= 2;
 
   async function save() {
     setSaving(true); setError("");

@@ -7,10 +7,10 @@ import { InstallPrompt } from "@/components/install-prompt";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
 export const metadata: Metadata = {
-  title: "BetWithFriends",
+  title: "Bet With Friends",
   description: "World Cup 2026 betting pools with friends",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "BetWithFriends" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Bet With Friends" },
   icons: {
     icon: [{ url: "/favicon_bwf.png", type: "image/png" }],
     shortcut: "/favicon_bwf.png",
