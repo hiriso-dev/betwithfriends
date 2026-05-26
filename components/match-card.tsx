@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { Flag } from "@/components/flag";
 
 type Match = {
   id: string;
@@ -26,29 +27,45 @@ type Match = {
   };
 };
 
+const CONFIDENCE_OPTIONS = [
+  { value: "cautious",  emoji: "😬", label: "Cautious", pts: "±2" },
+  { value: "confident", emoji: "👍", label: "Confident", pts: "±5" },
+  { value: "reckless",  emoji: "🔥", label: "Reckless",  pts: "±10" },
+] as const;
+
 const CONFIDENCE_EMOJI: Record<string, string> = {
-  cautious: "😬",
-  confident: "👍",
-  reckless: "🔥",
+  cautious: "😬", confident: "👍", reckless: "🔥",
 };
 
 function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
+    hour: "2-digit", minute: "2-digit", timeZoneName: "short",
   });
 }
 
-function ScoreBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function TapScore({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-sm font-bold active:bg-accent/20 transition"
-    >
-      {children}
-    </button>
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onChange(value + 1); }}
+        className="flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-accent/50 bg-surface-hover text-3xl font-black tabular-nums transition active:scale-95 active:border-accent active:bg-accent/10 select-none"
+      >
+        {value}
+      </button>
+      {/* Decrement — always takes space, hidden at 0 */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onChange(Math.max(0, value - 1)); }}
+        className={`flex h-7 w-14 items-center justify-center rounded-lg border font-bold text-base transition active:scale-95 ${
+          value > 0
+            ? "border-border bg-surface-hover text-foreground active:border-accent active:text-accent"
+            : "border-transparent opacity-0 pointer-events-none"
+        }`}
+      >
+        −
+      </button>
+    </div>
   );
 }
 
@@ -64,10 +81,6 @@ export default function MatchCard({
   onSaved?: () => void;
 }) {
   const router = useRouter();
-  const [quickMode, setQuickMode] = useState(false);
-  const [qHome, setQHome] = useState(match.my_bet?.home_score_pred ?? 0);
-  const [qAway, setQAway] = useState(match.my_bet?.away_score_pred ?? 0);
-  const [saving, setSaving] = useState(false);
 
   const now = Date.now();
   const kickoff = match.match_date * 1000;
@@ -78,14 +91,24 @@ export default function MatchCard({
   const hasBet = !!match.my_bet;
   const canBet = !!groupId && !isLocked && !isFinished && !isLive;
 
-  function enterQuick(e?: React.MouseEvent) {
+  // Show bet inputs immediately for unbet bettable matches — no tap required
+  const [quickMode, setQuickMode] = useState(!hasBet && canBet);
+  const [qHome, setQHome] = useState(match.my_bet?.home_score_pred ?? 0);
+  const [qAway, setQAway] = useState(match.my_bet?.away_score_pred ?? 0);
+  const [qConfidence, setQConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
+  const [qDoubleUp, setQDoubleUp] = useState((match.my_bet?.double_up ?? 0) === 1);
+  const [saving, setSaving] = useState(false);
+
+  function enterEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
     setQHome(match.my_bet?.home_score_pred ?? 0);
     setQAway(match.my_bet?.away_score_pred ?? 0);
+    setQConfidence(match.my_bet?.confidence ?? null);
+    setQDoubleUp((match.my_bet?.double_up ?? 0) === 1);
     setQuickMode(true);
   }
 
-  function cancelQuick(e?: React.MouseEvent) {
+  function cancelEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
     setQuickMode(false);
   }
@@ -102,14 +125,14 @@ export default function MatchCard({
           match_id: match.id,
           home_score_pred: qHome,
           away_score_pred: qAway,
-          confidence: match.my_bet?.confidence ?? null,
-          double_up: match.my_bet?.double_up ?? 0,
+          confidence: qConfidence,
+          double_up: qDoubleUp ? 1 : 0,
         }),
       });
       setQuickMode(false);
       onSaved?.();
     } catch {
-      // silent — user can retry or open full sheet
+      // silent
     } finally {
       setSaving(false);
     }
@@ -131,16 +154,11 @@ export default function MatchCard({
   const resultLabel = { exact: "⭐ Exact!", result: "✓ Correct result", wrong: "✗ Wrong", null: "" }[betResult ?? "null"];
 
   return (
-    <div
-      className={`rounded-2xl border bg-surface p-4 transition ${
-        isLive ? "border-success/50 shadow-[0_0_20px_rgba(34,197,94,0.1)]" :
-        isFinished ? "border-border" :
-        canBet ? "border-border active:border-accent/50 active:bg-surface-hover cursor-pointer" :
-        "border-border"
-      }`}
-      onClick={canBet && !quickMode ? enterQuick : undefined}
-    >
-      {/* Header row */}
+    <div className={`rounded-2xl border bg-surface transition ${
+      isLive ? "border-success/50 shadow-[0_0_20px_rgba(34,197,94,0.1)]" : "border-border"
+    } p-4`}>
+
+      {/* Header */}
       <div className="mb-2 flex items-start justify-between text-xs text-muted">
         <div>
           <span className="uppercase tracking-wide font-medium">
@@ -168,134 +186,180 @@ export default function MatchCard({
         </span>
       </div>
 
-      {/* Teams + Score */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          className="flex-1 text-right active:opacity-60"
-          onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.home_team_code}`); }}
-        >
-          <p className="font-bold leading-tight">{match.home_team}</p>
-          <p className="text-xs text-muted uppercase tracking-wider">{match.home_team_code}</p>
-        </button>
-
-        <div className="flex items-center gap-2 min-w-[80px] justify-center">
-          {isFinished || isLive ? (
-            <span className="text-2xl font-black tabular-nums">
-              {match.home_score ?? 0} – {match.away_score ?? 0}
-            </span>
-          ) : (
-            <span className="rounded-lg border border-dashed border-border px-4 py-1 text-sm text-muted">vs</span>
-          )}
-        </div>
-
-        <button
-          className="flex-1 text-left active:opacity-60"
-          onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.away_team_code}`); }}
-        >
-          <p className="font-bold leading-tight">{match.away_team}</p>
-          <p className="text-xs text-muted uppercase tracking-wider">{match.away_team_code}</p>
-        </button>
-      </div>
-
-      {/* Bet area */}
-      {groupId && (
-        <div className="mt-3 pt-3 border-t border-border">
-          {quickMode ? (
-            /* Quick bet entry */
-            <div className="flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-1.5">
-                <ScoreBtn onClick={() => setQHome(Math.max(0, qHome - 1))}>−</ScoreBtn>
-                <span className="w-6 text-center font-black tabular-nums text-lg">{qHome}</span>
-                <ScoreBtn onClick={() => setQHome(qHome + 1)}>+</ScoreBtn>
-              </div>
-              <span className="text-muted font-semibold">–</span>
-              <div className="flex items-center gap-1.5">
-                <ScoreBtn onClick={() => setQAway(Math.max(0, qAway - 1))}>−</ScoreBtn>
-                <span className="w-6 text-center font-black tabular-nums text-lg">{qAway}</span>
-                <ScoreBtn onClick={() => setQAway(qAway + 1)}>+</ScoreBtn>
-              </div>
-              <div className="flex items-center gap-2 ml-1">
-                <button
-                  onClick={saveQuick}
-                  disabled={saving}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-[#0f0f23] font-bold text-sm transition active:scale-95 disabled:opacity-50"
-                >
-                  {saving ? "…" : "✓"}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); cancelQuick(); onBet(); }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border text-sm transition active:scale-95"
-                  title="Full bet sheet"
-                >
-                  ⚙
-                </button>
-                <button
-                  onClick={cancelQuick}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border text-xs text-muted transition active:scale-95"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ) : hasBet ? (
-            /* Existing bet display */
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-1.5 text-muted flex-wrap">
-                <span>Your bet:</span>
-                <span className="font-semibold text-foreground">
-                  {match.my_bet!.home_score_pred} – {match.my_bet!.away_score_pred}
-                </span>
-                {match.my_bet!.confidence && (
-                  <span className="text-base">{CONFIDENCE_EMOJI[match.my_bet!.confidence]}</span>
-                )}
-                {match.my_bet!.double_up === 1 && (
-                  <span className="text-xs bg-accent/15 text-accent rounded px-1">×2</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {isFinished ? (
-                  <div className="flex flex-col items-end gap-0.5">
-                    {match.my_bet?.points_earned !== null && (
-                      <span className={`font-bold text-sm ${resultColor}`}>
-                        {(match.my_bet!.points_earned! > 0 ? "+" : "") + match.my_bet!.points_earned!.toFixed(1) + "pts"}
-                      </span>
-                    )}
-                    {betResult && (
-                      <span className={`text-xs ${resultColor}`}>{resultLabel}</span>
-                    )}
-                  </div>
-                ) : !isLocked ? (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); enterQuick(e); }}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-xs transition active:scale-95"
-                      title="Quick edit"
-                    >
-                      ✏
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onBet(); }}
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-xs transition active:scale-95"
-                      title="Full bet sheet"
-                    >
-                      ⚙
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : !isLocked ? (
-            /* No bet yet — tap to quick-bet */
+      {quickMode && canBet ? (
+        /* ── QUICK BET MODE (default for unbet matches) ── */
+        <div onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-start justify-between gap-2 mb-3">
             <button
-              onClick={(e) => { e.stopPropagation(); enterQuick(e); }}
-              className="w-full rounded-xl bg-accent/10 border border-accent/30 py-2 text-sm font-semibold text-accent transition active:bg-accent/20"
+              className="flex-1 text-right pt-3 active:opacity-60"
+              onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.home_team_code}`); }}
             >
-              Tap to bet quickly · ⚙ for full options
+              <p className="text-3xl leading-none mb-0.5"><Flag code={match.home_team_code} /></p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">{match.home_team_code}</p>
+              <p className="text-[11px] text-muted leading-tight truncate">{match.home_team}</p>
             </button>
-          ) : (
-            <p className="text-center text-xs text-muted">No prediction placed</p>
-          )}
+
+            <div className="flex items-start gap-3">
+              <TapScore value={qHome} onChange={setQHome} />
+              <span className="mt-3.5 text-xl font-black text-muted">–</span>
+              <TapScore value={qAway} onChange={setQAway} />
+            </div>
+
+            <button
+              className="flex-1 text-left pt-3 active:opacity-60"
+              onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.away_team_code}`); }}
+            >
+              <p className="text-3xl leading-none mb-0.5"><Flag code={match.away_team_code} /></p>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted">{match.away_team_code}</p>
+              <p className="text-[11px] text-muted leading-tight truncate">{match.away_team}</p>
+            </button>
+          </div>
+
+          {/* Confidence + Double Up */}
+          <div className="mb-1 flex items-center justify-center gap-2">
+            {CONFIDENCE_OPTIONS.map(({ value, emoji }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setQConfidence(qConfidence === value ? null : value); }}
+                className={`h-10 w-10 rounded-full text-xl border-2 transition active:scale-95 ${
+                  qConfidence === value
+                    ? "border-accent bg-accent/15"
+                    : "border-border bg-surface-hover"
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+            <div className="w-px h-6 bg-border mx-1" />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setQDoubleUp(d => !d); }}
+              className={`rounded-full px-3.5 h-10 text-sm font-black border-2 transition active:scale-95 ${
+                qDoubleUp
+                  ? "bg-accent text-[#0f0f23] border-accent"
+                  : "border-border text-muted bg-surface-hover"
+              }`}
+            >
+              ×2
+            </button>
+          </div>
+
+          {/* Icon legend */}
+          <div className="mb-4 flex items-center justify-center gap-2 text-[10px] text-muted">
+            {CONFIDENCE_OPTIONS.map(({ value, label, pts }) => (
+              <span key={value} className={`transition ${qConfidence === value ? "text-accent font-semibold" : ""}`}>
+                {label} {pts}
+              </span>
+            ))}
+            <span className="mx-0.5 text-border">|</span>
+            <span className={qDoubleUp ? "text-accent font-semibold" : ""}>×2 all pts</span>
+          </div>
+
+          {/* Save + Cancel + Help */}
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={saveQuick}
+              disabled={saving}
+              className="flex-1 rounded-xl bg-accent py-3 font-bold text-[#0f0f23] text-sm transition active:scale-95 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save bet"}
+            </button>
+            {hasBet && (
+              <button
+                onClick={cancelEdit}
+                className="rounded-xl border border-border px-4 py-3 text-sm text-muted transition active:bg-surface-hover"
+              >
+                ✕
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); setQuickMode(false); onBet(); }}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border text-sm font-bold text-muted transition active:border-accent active:text-accent"
+              title="Scoring options"
+            >
+              ?
+            </button>
+          </div>
         </div>
+      ) : (
+        /* ── NORMAL VIEW ── */
+        <>
+          {/* Teams + Score */}
+          <div
+            className={`flex items-center justify-between gap-2 ${hasBet && canBet ? "cursor-pointer" : ""}`}
+            onClick={hasBet && canBet ? enterEdit : undefined}
+          >
+            <button
+              className="flex-1 text-right active:opacity-60"
+              onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.home_team_code}`); }}
+            >
+              <p className="font-bold leading-tight">{match.home_team} <Flag code={match.home_team_code} /></p>
+              <p className="text-xs text-muted uppercase tracking-wider">{match.home_team_code}</p>
+            </button>
+
+            <div className="flex items-center gap-2 min-w-[80px] justify-center">
+              {isFinished || isLive ? (
+                <span className="text-2xl font-black tabular-nums">
+                  {match.home_score ?? 0} – {match.away_score ?? 0}
+                </span>
+              ) : (
+                <span className="rounded-lg border border-dashed border-border px-4 py-1 text-sm text-muted">vs</span>
+              )}
+            </div>
+
+            <button
+              className="flex-1 text-left active:opacity-60"
+              onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.away_team_code}`); }}
+            >
+              <p className="font-bold leading-tight"><Flag code={match.away_team_code} /> {match.away_team}</p>
+              <p className="text-xs text-muted uppercase tracking-wider">{match.away_team_code}</p>
+            </button>
+          </div>
+
+          {/* Bet area */}
+          {groupId && (
+            <div className="mt-3 pt-3 border-t border-border">
+              {hasBet ? (
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1.5 text-muted flex-wrap">
+                    <span>Your bet:</span>
+                    <span className="font-semibold text-foreground">
+                      {match.my_bet!.home_score_pred} – {match.my_bet!.away_score_pred}
+                    </span>
+                    {match.my_bet!.confidence && (
+                      <span className="text-base">{CONFIDENCE_EMOJI[match.my_bet!.confidence]}</span>
+                    )}
+                    {match.my_bet!.double_up === 1 && (
+                      <span className="text-xs bg-accent/15 text-accent rounded px-1 font-bold">×2</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isFinished ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        {match.my_bet?.points_earned !== null && (
+                          <span className={`font-bold text-sm ${resultColor}`}>
+                            {(match.my_bet!.points_earned! > 0 ? "+" : "") + match.my_bet!.points_earned!.toFixed(1) + "pts"}
+                          </span>
+                        )}
+                        {betResult && <span className={`text-xs ${resultColor}`}>{resultLabel}</span>}
+                      </div>
+                    ) : !isLocked ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); enterEdit(e); }}
+                        className="text-xs text-muted border border-border rounded-lg px-2.5 py-1 transition active:bg-surface-hover"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : isLocked ? (
+                <p className="text-center text-xs text-muted">No prediction placed</p>
+              ) : null}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

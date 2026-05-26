@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export default function GroupInvite({
   groupName,
@@ -10,18 +10,20 @@ export default function GroupInvite({
   inviteCode: string;
   onClose: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
   const inviteUrl = typeof window !== "undefined"
     ? `${window.location.origin}/groups/join?code=${inviteCode}`
-    : "";
+    : `https://betwithfriends.com/groups/join?code=${inviteCode}`;
 
-  async function copyLink() {
+  async function copy(text: string, which: "code" | "link") {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      if (which === "code") { setCopiedCode(true); setTimeout(() => setCopiedCode(false), 2000); }
+      else                  { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); }
     } catch {
-      // fallback
+      // fallback: select text manually (already visible)
     }
   }
 
@@ -29,42 +31,60 @@ export default function GroupInvite({
     if (navigator.share) {
       await navigator.share({
         title: `Join ${groupName} on BetWithFriends`,
-        text: `I'm predicting World Cup 2026 results. Join my group "${groupName}"!`,
+        text: `Join my World Cup 2026 prediction group "${groupName}"!`,
         url: inviteUrl,
-      });
+      }).catch(() => {});
     } else {
-      copyLink();
+      copy(inviteUrl, "link");
     }
   }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl">
-        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
-        <div className="mt-4 mb-6 text-center">
-          <h3 className="text-lg font-bold">Invite friends</h3>
-          <p className="text-sm text-muted mt-1">Share this code or link</p>
-        </div>
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl pb-safe">
+        <div className="px-6 pt-3 pb-6">
+          {/* Handle */}
+          <div className="mb-5 h-1 w-12 rounded-full bg-border mx-auto" />
 
-        {/* Invite code */}
-        <div className="mb-4 rounded-2xl border border-accent/30 bg-accent/5 p-4 text-center">
-          <p className="text-xs text-muted mb-1 uppercase tracking-widest">Invite code</p>
-          <p className="text-4xl font-black tracking-widest text-accent">{inviteCode}</p>
-        </div>
+          <h3 className="text-lg font-bold text-center mb-1">Invite friends</h3>
+          <p className="text-sm text-muted text-center mb-5">Share the code or the link below</p>
 
-        <div className="flex gap-3">
-          <button
-            onClick={copyLink}
-            className="flex-1 rounded-xl border border-border py-3.5 font-semibold text-sm transition active:border-accent active:text-accent"
-          >
-            {copied ? "✓ Copied!" : "Copy link"}
-          </button>
+          {/* Invite code */}
+          <div className="mb-3 flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent/5 px-5 py-4">
+            <div className="flex-1 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-muted mb-1">Invite code</p>
+              <p className="text-4xl font-black tracking-widest text-accent">{inviteCode}</p>
+            </div>
+            <button
+              onClick={() => copy(inviteCode, "code")}
+              className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold transition active:scale-95 ${
+                copiedCode ? "bg-success/20 text-success" : "bg-surface-hover border border-border text-muted active:text-foreground"
+              }`}
+            >
+              {copiedCode ? "✓" : "Copy"}
+            </button>
+          </div>
+
+          {/* Invite link */}
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-border bg-surface-hover px-4 py-3">
+            <p className="flex-1 truncate text-sm text-muted font-mono">{inviteUrl}</p>
+            <button
+              onClick={() => copy(inviteUrl, "link")}
+              className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold transition active:scale-95 ${
+                copiedLink ? "bg-success/20 text-success" : "border border-border bg-surface text-muted active:text-foreground"
+              }`}
+            >
+              {copiedLink ? "✓" : "Copy"}
+            </button>
+          </div>
+
+          {/* Share button */}
           <button
             onClick={share}
-            className="flex-1 rounded-xl bg-accent py-3.5 font-semibold text-sm text-[#0f0f23] transition active:scale-95"
+            className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95"
           >
-            Share
+            Share →
           </button>
         </div>
       </div>

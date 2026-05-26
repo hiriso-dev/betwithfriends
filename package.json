@@ -9,11 +9,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker:dev": "cd worker && wrangler dev",
-    "worker:deploy": "cd worker && wrangler deploy",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml",
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml",
     "worker:deploy:production": "wrangler deploy --config worker/wrangler.production.toml",
-    "db:init": "cd worker && wrangler d1 execute betwithfriends --local --file=src/db/schema.sql",
-    "db:create": "cd worker && wrangler d1 create betwithfriends",
+    "db:init": "wrangler d1 execute betwithfriends --local --file=worker/src/db/schema.sql --config worker/wrangler.toml",
+    "db:create": "wrangler d1 create betwithfriends --config worker/wrangler.toml",
+    "db:seed": "wrangler d1 execute betwithfriends --local --file=worker/src/db/reset-and-seed.sql --config worker/wrangler.toml",
     "vapid:generate": "node -e \"const {generateVAPIDKeys}=require('web-push');const k=generateVAPIDKeys();console.log('Public:',k.publicKey);console.log('Private:',k.privateKey);\""
   },
   "dependencies": {

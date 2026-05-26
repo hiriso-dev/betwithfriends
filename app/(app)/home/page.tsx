@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { Flag } from "@/components/flag";
 
 type Match = {
   id: string;
@@ -229,12 +230,12 @@ export default function HomePage() {
           </p>
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex-1 text-right">
-              <p className="font-bold">{featured.home_team}</p>
+              <p className="font-bold">{featured.home_team} <Flag code={featured.home_team_code} /></p>
               <p className="text-xs text-muted uppercase">{featured.home_team_code}</p>
             </div>
             <span className="mx-2 text-sm font-bold text-muted">vs</span>
             <div className="flex-1 text-left">
-              <p className="font-bold">{featured.away_team}</p>
+              <p className="font-bold"><Flag code={featured.away_team_code} /> {featured.away_team}</p>
               <p className="text-xs text-muted uppercase">{featured.away_team_code}</p>
             </div>
           </div>
@@ -311,7 +312,7 @@ export default function HomePage() {
             return (
               <div key={m.id} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{m.home_team} {m.home_score} – {m.away_score} {m.away_team}</p>
+                  <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {m.home_score} – {m.away_score} <Flag code={m.away_team_code} /> {m.away_team}</p>
                   <p className="text-[10px] text-muted">Group {m.group_name}</p>
                 </div>
                 {bet && (
@@ -397,7 +398,7 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
       <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
         <div className="mb-4 mt-3 text-center">
-          <h3 className="text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
+          <h3 className="text-lg font-bold"><Flag code={match.home_team_code} /> {match.home_team} vs {match.away_team} <Flag code={match.away_team_code} /></h3>
           <p className="mt-1 text-xs text-muted">
             {new Date(match.match_date * 1000).toLocaleString("en-US", {
               weekday: "short", month: "short", day: "numeric",

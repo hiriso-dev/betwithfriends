@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import MatchCard from "@/components/match-card";
+import { HelpDialog, useHelpDialog } from "@/components/help-dialog";
+import { Flag } from "@/components/flag";
 import { useRouter } from "next/navigation";
 
 const WC_GROUPS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
@@ -44,6 +46,7 @@ function computeStandings(matches: Match[]): Standing[] {
 
 export default function FixturesPage() {
   const router = useRouter();
+  const { open: helpOpen, close: closeHelp, openHelp } = useHelpDialog();
   const [allMatches, setAllMatches] = useState<Match[]>([]);
   const [view, setView] = useState<"schedule" | "groups">("schedule");
   const [selectedWcGroup, setSelectedWcGroup] = useState("A");
@@ -103,7 +106,7 @@ export default function FixturesPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
-      {/* View toggle + betting group selector */}
+      {/* View toggle + betting group selector + help */}
       <div className="mb-4 flex items-center gap-2">
         <div className="flex rounded-xl bg-surface border border-border p-0.5 shrink-0">
           <button
@@ -119,6 +122,13 @@ export default function FixturesPage() {
             Groups
           </button>
         </div>
+        <button
+          onClick={openHelp}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-sm font-bold text-muted shrink-0 transition active:border-accent active:text-accent"
+          title="How to play"
+        >
+          ?
+        </button>
 
         {groups.length > 0 && (
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none flex-1 min-w-0">
@@ -204,7 +214,7 @@ export default function FixturesPage() {
                       onClick={() => router.push(`/teams/${s.code}`)}
                     >
                       <td className="px-3 py-2.5"><span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span></td>
-                      <td className="px-3 py-2.5"><span className="font-semibold">{s.team}</span><span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span></td>
+                      <td className="px-3 py-2.5"><span className="mr-1"><Flag code={s.code} /></span><span className="font-semibold">{s.team}</span><span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span></td>
                       <td className="px-2 py-2.5 text-center text-muted">{s.played}</td>
                       <td className="px-2 py-2.5 text-center text-muted">{s.won}</td>
                       <td className="px-2 py-2.5 text-center text-muted">{s.drawn}</td>
@@ -220,6 +230,9 @@ export default function FixturesPage() {
           )}
         </>
       )}
+
+      {/* Help dialog */}
+      {helpOpen && <HelpDialog onClose={closeHelp} />}
 
       {/* Bet sheet */}
       {betTarget && (() => {
@@ -307,7 +320,7 @@ function BetSheet({
           <p className="text-xs text-muted uppercase tracking-widest">
             {match.group_name ? `Group ${match.group_name}` : match.stage}
           </p>
-          <h3 className="mt-1 text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
+          <h3 className="mt-1 text-lg font-bold"><Flag code={match.home_team_code} /> {match.home_team} vs {match.away_team} <Flag code={match.away_team_code} /></h3>
           <p className="mt-1 text-xs text-muted">
             {new Date(match.match_date * 1000).toLocaleString("en-US", {
               weekday: "short", month: "short", day: "numeric",

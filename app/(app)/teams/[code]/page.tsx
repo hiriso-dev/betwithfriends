@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
+import { Flag } from "@/components/flag";
 
 type Match = {
   id: string;
@@ -65,7 +66,7 @@ export default function TeamPage() {
       {/* Team header */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{teamName}</h1>
+          <h1 className="text-2xl font-bold"><Flag code={code} /> {teamName}</h1>
           <p className="text-sm text-muted">{wcGroup ? `Group ${wcGroup}` : "—"}</p>
         </div>
         {myStanding && (
@@ -121,7 +122,7 @@ export default function TeamPage() {
                   )}
                   <div>
                     <p className="text-sm font-semibold">
-                      {isHome ? "vs" : "@"} {opponent}
+                      {isHome ? "vs" : "@"} <Flag code={opponentCode} /> {opponent}
                       <span className="ml-1 text-xs text-muted">{opponentCode}</span>
                     </p>
                     <p className="text-[10px] text-muted">
@@ -178,6 +179,7 @@ export default function TeamPage() {
                 >
                   <td className="px-3 py-2.5"><span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span></td>
                   <td className="px-3 py-2.5">
+                    <span className="mr-1"><Flag code={s.code} /></span>
                     <span className={`font-semibold ${s.code === code ? "text-accent" : ""}`}>{s.team}</span>
                     <span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span>
                   </td>

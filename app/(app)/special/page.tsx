@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { Flag } from "@/components/flag";
 
 const SPECIAL_BET_TYPES = [
   { type: "champion", label: "🏆 World Champion", points: 50, description: "Which team will lift the trophy?" },
@@ -11,15 +12,29 @@ const SPECIAL_BET_TYPES = [
 ];
 
 const WC_TEAMS = [
-  "Argentina", "Australia", "Belgium", "Brazil", "Cameroon",
-  "Canada", "Chile", "Colombia", "Croatia", "Denmark", "Ecuador",
-  "Egypt", "England", "France", "Germany", "Ghana", "Greece",
-  "Honduras", "Hungary", "Iran", "Israel", "Italy", "Japan",
-  "South Korea", "Mexico", "Morocco", "Netherlands", "Nigeria",
-  "New Zealand", "Panama", "Paraguay", "Peru", "Poland", "Portugal",
-  "Saudi Arabia", "Senegal", "Serbia", "South Africa", "Spain",
-  "Switzerland", "Turkey", "Ukraine", "United States", "Uruguay",
-  "Venezuela", "Wales",
+  { name: "Argentina",     code: "ARG" }, { name: "Australia",    code: "AUS" },
+  { name: "Belgium",       code: "BEL" }, { name: "Brazil",       code: "BRA" },
+  { name: "Cameroon",      code: "CMR" }, { name: "Canada",       code: "CAN" },
+  { name: "Chile",         code: "CHI" }, { name: "Colombia",     code: "COL" },
+  { name: "Croatia",       code: "CRO" }, { name: "Denmark",      code: "DEN" },
+  { name: "Ecuador",       code: "ECU" }, { name: "Egypt",        code: "EGY" },
+  { name: "England",       code: "ENG" }, { name: "France",       code: "FRA" },
+  { name: "Germany",       code: "GER" }, { name: "Ghana",        code: "GHA" },
+  { name: "Greece",        code: "GRE" }, { name: "Honduras",     code: "HON" },
+  { name: "Hungary",       code: "HUN" }, { name: "Iran",         code: "IRN" },
+  { name: "Israel",        code: "ISR" }, { name: "Italy",        code: "ITA" },
+  { name: "Japan",         code: "JPN" }, { name: "South Korea",  code: "KOR" },
+  { name: "Mexico",        code: "MEX" }, { name: "Morocco",      code: "MAR" },
+  { name: "Netherlands",   code: "NED" }, { name: "Nigeria",      code: "NGA" },
+  { name: "New Zealand",   code: "NZL" }, { name: "Panama",       code: "PAN" },
+  { name: "Paraguay",      code: "PAR" }, { name: "Peru",         code: "PER" },
+  { name: "Poland",        code: "POL" }, { name: "Portugal",     code: "POR" },
+  { name: "Saudi Arabia",  code: "KSA" }, { name: "Senegal",      code: "SEN" },
+  { name: "Serbia",        code: "SRB" }, { name: "South Africa", code: "RSA" },
+  { name: "Spain",         code: "ESP" }, { name: "Switzerland",  code: "SUI" },
+  { name: "Turkey",        code: "TUR" }, { name: "Ukraine",      code: "UKR" },
+  { name: "United States", code: "USA" }, { name: "Uruguay",      code: "URU" },
+  { name: "Venezuela",     code: "VEN" }, { name: "Wales",        code: "WAL" },
 ];
 
 type SpecialBet = {
@@ -187,17 +202,17 @@ export default function SpecialPage() {
               {SPECIAL_BET_TYPES.find((s) => s.type === editingType)?.label}
             </h3>
             <div className="mb-4 grid grid-cols-2 gap-2">
-              {WC_TEAMS.map((team) => (
+              {WC_TEAMS.map(({ name, code: tCode }) => (
                 <button
-                  key={team}
-                  onClick={() => setSelectedValue(team)}
+                  key={name}
+                  onClick={() => setSelectedValue(name)}
                   className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                    selectedValue === team
+                    selectedValue === name
                       ? "bg-accent text-[#0f0f23]"
                       : "bg-surface-hover text-foreground border border-border active:border-accent"
                   }`}
                 >
-                  {team}
+                  <Flag code={tCode} /> {name}
                 </button>
               ))}
             </div>
