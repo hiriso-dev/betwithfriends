@@ -159,6 +159,17 @@ export function AdminTestMatch({ onMatchChange }: { onMatchChange: () => void })
   const [creating, setCreating] = useState(false);
   const [offsetMinutes, setOffsetMinutes] = useState(10);
   const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== "undefined" && localStorage.getItem("bwf-admin-collapsed") === "1"
+  );
+
+  function toggleCollapse() {
+    setCollapsed(v => {
+      const next = !v;
+      localStorage.setItem("bwf-admin-collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
 
   const load = useCallback(() => {
     apiFetch<TestMatch[]>("/api/admin/test-matches")
@@ -210,50 +221,62 @@ export function AdminTestMatch({ onMatchChange }: { onMatchChange: () => void })
   }
 
   return (
-    <div className="mb-4 rounded-2xl border border-accent/40 bg-accent/5 p-4">
-      <p className="mb-1 text-xs font-bold uppercase tracking-widest text-accent">Admin — Test Match</p>
-      <p className="mb-3 text-[10px] text-muted">Create a fake match, bet on it, then finish it to see your points</p>
-
-      {error && <p className="mb-2 text-xs text-danger">{error}</p>}
-
-      {/* Create */}
-      {matches.filter(m => m.status !== "finished").length === 0 && (
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex-1">
-            <label className="block text-[10px] text-muted mb-1">Minutes to bet before kickoff</label>
-            <input
-              type="number"
-              value={offsetMinutes}
-              onChange={e => setOffsetMinutes(Number(e.target.value))}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
-              min={1} max={60}
-            />
-          </div>
-          <button
-            onClick={createMatch}
-            disabled={creating}
-            className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
-          >
-            {creating ? "…" : "Create"}
-          </button>
+    <div className="mb-4 rounded-2xl border border-accent/40 bg-accent/5">
+      <button
+        onClick={toggleCollapse}
+        className="w-full flex items-center justify-between px-4 py-3"
+      >
+        <div className="text-left">
+          <p className="text-xs font-bold uppercase tracking-widest text-accent">Admin — Test Match</p>
+          {collapsed && <p className="text-[10px] text-muted mt-0.5">{matches.length} match{matches.length !== 1 ? "es" : ""}</p>}
         </div>
-      )}
+        <span className="text-muted text-sm">{collapsed ? "▸" : "▾"}</span>
+      </button>
 
-      {/* Match list */}
-      {matches.length > 0 ? (
-        <div className="space-y-3">
-          {matches.map(m => (
-            <MatchRow
-              key={m.id}
-              m={m}
-              onFinish={finishMatch}
-              onLock={lockMatch}
-              onDelete={deleteMatch}
-            />
-          ))}
+      {!collapsed && (
+        <div className="px-4 pb-4">
+          {error && <p className="mb-2 text-xs text-danger">{error}</p>}
+
+          {/* Create */}
+          {matches.filter(m => m.status !== "finished").length === 0 && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex-1">
+                <label className="block text-[10px] text-muted mb-1">Minutes to bet before kickoff</label>
+                <input
+                  type="number"
+                  value={offsetMinutes}
+                  onChange={e => setOffsetMinutes(Number(e.target.value))}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
+                  min={1} max={60}
+                />
+              </div>
+              <button
+                onClick={createMatch}
+                disabled={creating}
+                className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
+              >
+                {creating ? "…" : "Create"}
+              </button>
+            </div>
+          )}
+
+          {/* Match list */}
+          {matches.length > 0 ? (
+            <div className="space-y-3">
+              {matches.map(m => (
+                <MatchRow
+                  key={m.id}
+                  m={m}
+                  onFinish={finishMatch}
+                  onLock={lockMatch}
+                  onDelete={deleteMatch}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-xs text-muted py-2">No test match yet</p>
+          )}
         </div>
-      ) : (
-        <p className="text-center text-xs text-muted py-2">No test match yet</p>
       )}
     </div>
   );

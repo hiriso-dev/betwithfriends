@@ -52,7 +52,7 @@ export default function FixturesPage() {
   const router = useRouter();
   const { open: helpOpen, close: closeHelp, openHelp } = useHelpDialog();
   const [allMatches, setAllMatches] = useState<Match[]>([]);
-  const [view, setView] = useState<"schedule" | "groups">("schedule");
+  const [view, setView] = useState<"coming" | "past" | "groups">("coming");
   const [selectedWcGroup, setSelectedWcGroup] = useState("A");
   const [bettingGroupId, setBettingGroupId] = useState<string>("none");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -115,16 +115,26 @@ export default function FixturesPage() {
     );
   }
 
-  const scheduleMatches = [...allMatches].sort((a, b) => a.match_date - b.match_date);
+  const comingMatches = [...allMatches]
+    .filter(m => m.status !== "finished")
+    .sort((a, b) => a.match_date - b.match_date);
 
-  const matchesByDay = scheduleMatches.reduce((acc, m) => {
-    const key = new Date(m.match_date * 1000).toLocaleDateString("en-US", {
-      weekday: "long", month: "long", day: "numeric",
-    });
-    (acc[key] ??= []).push(m);
-    return acc;
-  }, {} as Record<string, Match[]>);
-  const dayEntries = Object.entries(matchesByDay);
+  const pastMatches = [...allMatches]
+    .filter(m => m.status === "finished")
+    .sort((a, b) => b.match_date - a.match_date);
+
+  function groupByDay(matches: Match[]) {
+    return matches.reduce((acc, m) => {
+      const key = new Date(m.match_date * 1000).toLocaleDateString("en-US", {
+        weekday: "long", month: "long", day: "numeric",
+      });
+      (acc[key] ??= []).push(m);
+      return acc;
+    }, {} as Record<string, Match[]>);
+  }
+
+  const comingByDay = Object.entries(groupByDay(comingMatches));
+  const pastByDay = Object.entries(groupByDay(pastMatches));
   const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup).sort((a, b) => a.match_date - b.match_date);
   const standings = computeStandings(groupMatches);
 
@@ -137,57 +147,72 @@ export default function FixturesPage() {
         <AdminTestMatch onMatchChange={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
       )}
 
-      {/* View toggle + betting group selector + help */}
+      {/* Betting group selector — top row */}
+      {groups.length > 1 && (
+        <div className="mb-2 flex rounded-xl bg-surface border border-border p-0.5 gap-0.5">
+          {groups.map(g => (
+            <button key={g.id} onClick={() => setBettingGroupId(g.id)}
+              className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition truncate ${bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+            >
+              {g.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* View toggle + help — second row */}
       <div className="mb-4 flex items-center gap-2">
-        <div className="flex rounded-xl bg-surface border border-border p-0.5 shrink-0">
-          <button
-            onClick={() => setView("schedule")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "schedule" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
-          >
-            Schedule
-          </button>
-          <button
-            onClick={() => setView("groups")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "groups" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
-          >
-            Groups
-          </button>
+        <div className="flex flex-1 rounded-xl bg-surface border border-border p-0.5">
+          {(["coming", "past", "groups"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${view === v ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+            >
+              {v === "coming" ? "Coming" : v === "past" ? "Past" : "Groups"}
+            </button>
+          ))}
         </div>
         <button
           onClick={openHelp}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-sm font-bold text-muted shrink-0 transition active:border-accent active:text-accent"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm font-bold text-muted shrink-0 transition active:border-accent active:text-accent"
           title="How to play"
         >
           ?
         </button>
-
-        {groups.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none flex-1 min-w-0">
-            <button
-              onClick={() => setBettingGroupId("none")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${bettingGroupId === "none" ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
-            >
-              No bets
-            </button>
-            {groups.map(g => (
-              <button key={g.id} onClick={() => setBettingGroupId(g.id)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
-              >
-                {g.name}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* SCHEDULE VIEW — chronological, grouped by day */}
-      {view === "schedule" && (
+      {/* COMING VIEW */}
+      {view === "coming" && (
         <div className="space-y-6">
-          {dayEntries.map(([day, dayMatches]) => (
+          {comingByDay.length === 0 && (
+            <p className="py-12 text-center text-sm text-muted">No upcoming matches</p>
+          )}
+          {comingByDay.map(([day, dayMatches]) => (
             <div key={day}>
               <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted">{day}</p>
               <div className="space-y-3">
-                {dayMatches.map(match => (
+                {(dayMatches as Match[]).map(match => (
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                    onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* PAST VIEW — newest first */}
+      {view === "past" && (
+        <div className="space-y-6">
+          {pastByDay.length === 0 && (
+            <p className="py-12 text-center text-sm text-muted">No finished matches yet</p>
+          )}
+          {pastByDay.map(([day, dayMatches]) => (
+            <div key={day}>
+              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted">{day}</p>
+              <div className="space-y-3">
+                {(dayMatches as Match[]).map(match => (
                   <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}

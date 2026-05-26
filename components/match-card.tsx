@@ -121,6 +121,24 @@ export default function MatchCard({
     return () => clearInterval(id);
   }, [isLocked, fastRefresh]);
 
+  // Sync bet state when group changes or API data arrives with new bet info.
+  // Using a stable string key so we don't react to every render, only real data changes.
+  const betKey = `${groupId ?? ""}:${
+    match.my_bet
+      ? `${match.my_bet.home_score_pred}|${match.my_bet.away_score_pred}|${match.my_bet.confidence ?? ""}|${match.my_bet.double_up}`
+      : "none"
+  }`;
+  useEffect(() => {
+    if (saving) return;
+    setQuickMode(!match.my_bet && !!groupId && !isLocked && !isFinished && !isLive);
+    setQHome(match.my_bet?.home_score_pred ?? 0);
+    setQAway(match.my_bet?.away_score_pred ?? 0);
+    setQConfidence(match.my_bet?.confidence ?? null);
+    setQDoubleUp((match.my_bet?.double_up ?? 0) === 1);
+    setSaveError(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [betKey]);
+
   function enterEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
     setQHome(match.my_bet?.home_score_pred ?? 0);
