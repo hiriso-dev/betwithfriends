@@ -84,8 +84,9 @@ export default function MatchCard({
 
   const now = Date.now();
   const kickoff = match.match_date * 1000;
-  const minutesLeft = Math.floor((kickoff - now) / 60000);
-  const isLocked = minutesLeft <= 0 || match.status !== "scheduled";
+  const secondsLeft = Math.floor((kickoff - now) / 1000);
+  const minutesLeft = Math.floor(secondsLeft / 60);
+  const isLocked = secondsLeft <= 0 || match.status !== "scheduled";
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   const hasBet = !!match.my_bet;
@@ -178,9 +179,9 @@ export default function MatchCard({
             <span className="font-semibold text-success">LIVE</span>
           ) : isFinished ? (
             <span>Full time</span>
-          ) : minutesLeft < 60 ? (
-            <span className={minutesLeft <= 5 ? "text-danger font-semibold" : "text-warning"}>
-              {minutesLeft <= 5 ? "🔒 Locked" : `⏱ ${minutesLeft}m`}
+          ) : secondsLeft < 3600 ? (
+            <span className={isLocked ? "text-danger font-semibold" : "text-warning"}>
+              {isLocked ? "🔒 Locked" : secondsLeft < 60 ? `⏱ ${secondsLeft}s` : `⏱ ${minutesLeft}m`}
             </span>
           ) : (
             <span>{fmtTime(match.match_date)}</span>
