@@ -3,7 +3,9 @@
     "allow": [
       "Bash(mkdir -p /Users/jerome/Documents/betwithfriends/app/\\\\\\(app\\\\\\)/teams/\\\\[code\\\\])",
       "Bash(npx tsc *)",
-      "Bash(wrangler d1 *)"
+      "Bash(wrangler d1 *)",
+      "Bash(node -e \"require\\('sharp'\\)\")",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "/Users/jerome/Documents/betwithfriends/app/(app)/teams"

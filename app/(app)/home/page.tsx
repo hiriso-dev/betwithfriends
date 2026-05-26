@@ -16,14 +16,28 @@ type Match = {
 };
 
 type Group = { id: string; name: string; my_points: number; my_rank: number; member_count: number };
+type SpecialBet = { bet_type: string; bet_value: string; points_earned: number | null };
+
+const WC_START = new Date("2026-06-11T21:00:00Z").getTime();
+
+const SPECIAL_BET_TYPES = [
+  { type: "champion",    label: "🏆 World Champion", points: 50, description: "Who lifts the trophy?" },
+  { type: "runner_up",   label: "🥈 Runner-up",       points: 20, description: "Who loses the final?" },
+  { type: "third_place", label: "🥉 Third place",     points: 15, description: "Who finishes 3rd?" },
+  { type: "top_scorer",  label: "⚽ Golden Boot",     points: 30, description: "Top goalscorer" },
+];
 
 export default function HomePage() {
   const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [specialBets, setSpecialBets] = useState<SpecialBet[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
   const [betTarget, setBetTarget] = useState<Match | null>(null);
+  const [specialTarget, setSpecialTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const tournamentStarted = Date.now() >= WC_START;
+  const daysLeft = Math.max(0, Math.ceil((WC_START - Date.now()) / 86400000));
 
   useEffect(() => {
     apiFetch<Group[]>("/api/groups")
@@ -42,6 +56,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!selectedGroup || loading) return;
     apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
+    apiFetch<SpecialBet[]>(`/api/special-bets?group_id=${selectedGroup}`).then(setSpecialBets).catch(() => {});
   }, [selectedGroup, loading]);
 
   const now = Date.now() / 1000;
@@ -89,6 +104,63 @@ export default function HomePage() {
               {g.name}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Special bets — show first, priority */}
+      {selectedGroup && (
+        <div className="mb-6 rounded-2xl border bg-surface overflow-hidden" style={{ borderColor: tournamentStarted ? undefined : "rgba(var(--color-accent),0.4)" }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div>
+              <h2 className="font-semibold text-sm">⭐ Special Bets</h2>
+              <p className="text-[10px] text-muted mt-0.5">
+                {tournamentStarted
+                  ? "Tournament started — locked"
+                  : `${daysLeft}d left · lock in before June 11`}
+              </p>
+            </div>
+            {!tournamentStarted && (
+              <span className="text-xs font-semibold text-accent">
+                {specialBets.length}/4 placed
+              </span>
+            )}
+          </div>
+          <div className="divide-y divide-border">
+            {SPECIAL_BET_TYPES.map(spec => {
+              const existing = specialBets.find(b => b.bet_type === spec.type);
+              return (
+                <div key={spec.type} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{spec.label}</p>
+                    {existing ? (
+                      <p className="text-xs text-accent font-semibold truncate">{existing.bet_value}</p>
+                    ) : (
+                      <p className="text-xs text-muted">{spec.description}</p>
+                    )}
+                  </div>
+                  <div className="ml-3 flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold text-accent">+{spec.points}pts</span>
+                    {!tournamentStarted ? (
+                      <button
+                        onClick={() => setSpecialTarget(spec.type)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                          existing
+                            ? "border border-border text-muted active:text-accent"
+                            : "bg-accent text-[#0f0f23] active:opacity-80"
+                        }`}
+                      >
+                        {existing ? "Edit" : "Pick"}
+                      </button>
+                    ) : existing ? (
+                      <span className="text-success text-sm">✓</span>
+                    ) : (
+                      <span className="text-muted text-sm">🔒</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -199,7 +271,21 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Bet sheet */}
+      {/* Special bet sheet */}
+      {specialTarget && (
+        <SpecialBetSheet
+          betType={specialTarget}
+          groupId={selectedGroup}
+          existing={specialBets.find(b => b.bet_type === specialTarget)?.bet_value}
+          onClose={() => setSpecialTarget(null)}
+          onSaved={(type, value) => {
+            setSpecialBets(prev => [...prev.filter(b => b.bet_type !== type), { bet_type: type, bet_value: value, points_earned: null }]);
+            setSpecialTarget(null);
+          }}
+        />
+      )}
+
+      {/* Match bet sheet */}
       {betTarget && (() => {
         const doubleUpsUsed = matches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
         return (
@@ -216,6 +302,91 @@ export default function HomePage() {
         );
       })()}
     </div>
+  );
+}
+
+const WC_TEAMS = [
+  "Argentina", "Australia", "Austria", "Belgium", "Brazil", "Cameroon",
+  "Canada", "Chile", "Colombia", "Costa Rica", "Croatia", "Denmark", "Ecuador",
+  "Egypt", "England", "France", "Germany", "Ghana", "Honduras", "Iran",
+  "Ireland", "Italy", "Ivory Coast", "Japan", "Mexico", "Morocco",
+  "Netherlands", "New Zealand", "Nigeria", "Peru", "Philippines", "Poland",
+  "Portugal", "Qatar", "Saudi Arabia", "Scotland", "Senegal", "Serbia",
+  "South Africa", "South Korea", "Spain", "Sweden", "Switzerland", "Turkey",
+  "Uruguay", "USA", "Venezuela", "Wales",
+];
+
+function SpecialBetSheet({ betType, groupId, existing, onClose, onSaved }: {
+  betType: string; groupId: string; existing?: string;
+  onClose: () => void; onSaved: (type: string, value: string) => void;
+}) {
+  const spec = SPECIAL_BET_TYPES.find(s => s.type === betType)!;
+  const isScorer = betType === "top_scorer";
+  const [selected, setSelected] = useState(existing ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    if (!selected.trim()) return;
+    setSaving(true); setError("");
+    try {
+      await apiFetch("/api/special-bets", {
+        method: "POST",
+        body: JSON.stringify({ group_id: groupId, bet_type: betType, bet_value: selected.trim() }),
+      });
+      if (navigator.vibrate) navigator.vibrate(50);
+      onSaved(betType, selected.trim());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
+        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
+        <div className="mb-4 mt-3">
+          <h3 className="text-lg font-bold">{spec.label}</h3>
+          <p className="text-xs text-muted mt-0.5">{spec.description} · <span className="text-accent font-semibold">+{spec.points}pts</span></p>
+        </div>
+
+        {isScorer ? (
+          <input
+            type="text"
+            value={selected}
+            onChange={e => setSelected(e.target.value)}
+            placeholder="Player name…"
+            className="w-full mb-4 rounded-xl border border-border bg-surface-hover px-4 py-3 text-sm outline-none focus:border-accent"
+          />
+        ) : (
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            {WC_TEAMS.map(team => (
+              <button
+                key={team}
+                onClick={() => setSelected(team)}
+                className={`rounded-xl px-3 py-2.5 text-sm font-medium transition text-left ${
+                  selected === team
+                    ? "bg-accent text-[#0f0f23]"
+                    : "bg-surface-hover border border-border text-foreground active:border-accent"
+                }`}
+              >
+                {team}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}
+        <button
+          onClick={save}
+          disabled={saving || !selected.trim()}
+          className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : `Confirm: ${selected || "—"}`}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -263,8 +434,8 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
         <div className="mb-4 mt-3 text-center">
           <h3 className="text-lg font-bold">{match.home_team} vs {match.away_team}</h3>
