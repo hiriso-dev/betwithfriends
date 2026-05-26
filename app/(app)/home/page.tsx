@@ -34,10 +34,16 @@ export default function HomePage() {
   const [specialBets, setSpecialBets] = useState<SpecialBet[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
   const [betTarget, setBetTarget] = useState<Match | null>(null);
-  const [specialTarget, setSpecialTarget] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
-  const tournamentStarted = Date.now() >= WC_START;
-  const daysLeft = Math.max(0, Math.ceil((WC_START - Date.now()) / 86400000));
+  const [tick, setTick] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const tournamentStarted = tick >= WC_START;
+  const daysLeft = Math.max(0, Math.ceil((WC_START - tick) / 86400000));
 
   useEffect(() => {
     apiFetch<Group[]>("/api/groups")
@@ -75,6 +81,28 @@ export default function HomePage() {
     .filter(m => m.status === "finished")
     .sort((a, b) => b.match_date - a.match_date)
     .slice(0, 3);
+
+  // Countdown: next bet that closes (soonest lock = match_date - 5min, or WC_START for specials)
+  const BET_LOCK_MS = 5 * 60 * 1000;
+  const specialsDeadline = !tournamentStarted && specialBets.length < SPECIAL_BET_TYPES.length ? WC_START : Infinity;
+  const nextMatchLock = upcoming.length > 0 ? upcoming[0].match_date * 1000 - BET_LOCK_MS : Infinity;
+  const nextDeadlineMs = Math.min(specialsDeadline, nextMatchLock);
+  const isSpecialDeadline = specialsDeadline <= nextMatchLock && specialsDeadline < Infinity;
+  const msUntilClose = Math.max(0, nextDeadlineMs - tick);
+
+  function fmtCountdown(ms: number): string {
+    if (ms <= 0) return "Locked";
+    const totalSeconds = Math.floor(ms / 1000);
+    const d = Math.floor(totalSeconds / 86400);
+    const h = Math.floor((totalSeconds % 86400) / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    return `${m}m ${s}s`;
+  }
+
+  const unplacedSpecials = SPECIAL_BET_TYPES.filter(s => !specialBets.find(b => b.bet_type === s.type));
 
   if (loading) {
     return (
@@ -140,67 +168,63 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Special bets — show first, priority */}
-      {groups.length > 0 && (
-        <div className="mb-6 rounded-2xl border bg-surface overflow-hidden" style={{ borderColor: tournamentStarted ? undefined : "rgba(var(--color-accent),0.4)" }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      {/* Countdown to next bet close */}
+      {groups.length > 0 && nextDeadlineMs < Infinity && msUntilClose > 0 && (
+        <button
+          onClick={() => isSpecialDeadline ? router.push("/special") : featured && setBetTarget(featured)}
+          className="mb-4 w-full rounded-2xl border border-accent/40 bg-surface px-4 py-3 text-left transition active:bg-surface-hover"
+        >
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-semibold text-sm">⭐ Special Bets</h2>
-              <p className="text-[10px] text-muted mt-0.5">
-                {tournamentStarted
-                  ? "Tournament started — locked"
-                  : `${daysLeft}d left · lock in before June 11`}
+              <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-0.5">
+                {isSpecialDeadline ? "⭐ Special bets close in" : "🔒 Next bet locks in"}
+              </p>
+              <p className="font-black text-xl tabular-nums">{fmtCountdown(msUntilClose)}</p>
+            </div>
+            <div className="text-right">
+              {isSpecialDeadline ? (
+                <p className="text-sm font-semibold text-accent">Place specials →</p>
+              ) : featured ? (
+                <>
+                  <p className="text-sm font-semibold">{featured.home_team} vs {featured.away_team}</p>
+                  <p className="text-xs text-muted">{featured.group_name ? `Group ${featured.group_name}` : featured.stage} · Bet now →</p>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* Special bets compact CTA */}
+      {groups.length > 0 && !tournamentStarted && unplacedSpecials.length > 0 && (
+        <button
+          onClick={() => router.push("/special")}
+          className="mb-4 w-full rounded-2xl border border-border bg-surface px-4 py-3 text-left transition active:bg-surface-hover"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-sm">⭐ Special Bets</p>
+              <p className="text-xs text-muted mt-0.5">
+                {unplacedSpecials.length} of {SPECIAL_BET_TYPES.length} not placed · locks June 11
               </p>
             </div>
-            {!tournamentStarted && (
-              <span className="text-xs font-semibold text-accent">
-                {specialBets.length}/4 placed
-              </span>
-            )}
+            <span className="text-accent font-semibold text-sm">Place →</span>
           </div>
-          <div className="divide-y divide-border">
-            {SPECIAL_BET_TYPES.map(spec => {
-              const existing = specialBets.find(b => b.bet_type === spec.type);
-              return (
-                <div key={spec.type} className="flex items-center justify-between px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{spec.label}</p>
-                    {existing ? (
-                      <p className="text-xs text-accent font-semibold truncate">{existing.bet_value}</p>
-                    ) : (
-                      <p className="text-xs text-muted">{spec.description}</p>
-                    )}
-                  </div>
-                  <div className="ml-3 flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-bold text-accent">+{spec.points}pts</span>
-                    {!tournamentStarted ? (
-                      <button
-                        onClick={() => setSpecialTarget(spec.type)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                          existing
-                            ? "border border-border text-muted active:text-accent"
-                            : "bg-accent text-[#0f0f23] active:opacity-80"
-                        }`}
-                      >
-                        {existing ? "Edit" : "Pick"}
-                      </button>
-                    ) : existing ? (
-                      <span className="text-success text-sm">✓</span>
-                    ) : (
-                      <span className="text-muted text-sm">🔒</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+        </button>
+      )}
+      {groups.length > 0 && !tournamentStarted && unplacedSpecials.length === 0 && (
+        <div className="mb-4 rounded-2xl border border-border bg-surface px-4 py-3">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-sm">⭐ Special Bets</p>
+            <span className="text-success text-sm font-semibold">✓ All placed</span>
           </div>
         </div>
       )}
 
       {/* Next bet CTA */}
       {featured ? (
-        <div className="mb-6 rounded-2xl border border-accent/40 bg-surface p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-accent">
+        <div className="mb-6 rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
             {nextUnbet ? "⚡ Next bet to place" : "🗓 Next match"}
           </p>
           <div className="mb-3 flex items-center justify-between gap-2">
@@ -304,20 +328,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Special bet sheet */}
-      {specialTarget && (
-        <SpecialBetSheet
-          betType={specialTarget}
-          groupId={selectedGroup}
-          existing={specialBets.find(b => b.bet_type === specialTarget)?.bet_value}
-          onClose={() => setSpecialTarget(null)}
-          onSaved={(type, value) => {
-            setSpecialBets(prev => [...prev.filter(b => b.bet_type !== type), { bet_type: type, bet_value: value, points_earned: null }]);
-            setSpecialTarget(null);
-          }}
-        />
-      )}
-
       {/* Match bet sheet */}
       {betTarget && (() => {
         const doubleUpsUsed = matches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
@@ -338,90 +348,6 @@ export default function HomePage() {
   );
 }
 
-const WC_TEAMS = [
-  "Argentina", "Australia", "Austria", "Belgium", "Brazil", "Cameroon",
-  "Canada", "Chile", "Colombia", "Costa Rica", "Croatia", "Denmark", "Ecuador",
-  "Egypt", "England", "France", "Germany", "Ghana", "Honduras", "Iran",
-  "Ireland", "Italy", "Ivory Coast", "Japan", "Mexico", "Morocco",
-  "Netherlands", "New Zealand", "Nigeria", "Peru", "Philippines", "Poland",
-  "Portugal", "Qatar", "Saudi Arabia", "Scotland", "Senegal", "Serbia",
-  "South Africa", "South Korea", "Spain", "Sweden", "Switzerland", "Turkey",
-  "Uruguay", "USA", "Venezuela", "Wales",
-];
-
-function SpecialBetSheet({ betType, groupId, existing, onClose, onSaved }: {
-  betType: string; groupId: string; existing?: string;
-  onClose: () => void; onSaved: (type: string, value: string) => void;
-}) {
-  const spec = SPECIAL_BET_TYPES.find(s => s.type === betType)!;
-  const isScorer = betType === "top_scorer";
-  const [selected, setSelected] = useState(existing ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function save() {
-    if (!selected.trim()) return;
-    setSaving(true); setError("");
-    try {
-      await apiFetch("/api/special-bets", {
-        method: "POST",
-        body: JSON.stringify({ group_id: groupId, bet_type: betType, bet_value: selected.trim() }),
-      });
-      if (navigator.vibrate) navigator.vibrate(50);
-      onSaved(betType, selected.trim());
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to save");
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
-        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
-        <div className="mb-4 mt-3">
-          <h3 className="text-lg font-bold">{spec.label}</h3>
-          <p className="text-xs text-muted mt-0.5">{spec.description} · <span className="text-accent font-semibold">+{spec.points}pts</span></p>
-        </div>
-
-        {isScorer ? (
-          <input
-            type="text"
-            value={selected}
-            onChange={e => setSelected(e.target.value)}
-            placeholder="Player name…"
-            className="w-full mb-4 rounded-xl border border-border bg-surface-hover px-4 py-3 text-sm outline-none focus:border-accent"
-          />
-        ) : (
-          <div className="mb-4 grid grid-cols-2 gap-2">
-            {WC_TEAMS.map(team => (
-              <button
-                key={team}
-                onClick={() => setSelected(team)}
-                className={`rounded-xl px-3 py-2.5 text-sm font-medium transition text-left ${
-                  selected === team
-                    ? "bg-accent text-[#0f0f23]"
-                    : "bg-surface-hover border border-border text-foreground active:border-accent"
-                }`}
-              >
-                {team}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}
-        <button
-          onClick={save}
-          disabled={saving || !selected.trim()}
-          className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : `Confirm: ${selected || "—"}`}
-        </button>
-      </div>
-    </>
-  );
-}
 
 const CONFIDENCE_OPTIONS = [
   { value: null,        label: "None",     emoji: "—",  pts: { correct: 0, wrong: 0 } },

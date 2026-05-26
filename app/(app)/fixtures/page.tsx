@@ -87,6 +87,15 @@ export default function FixturesPage() {
   }
 
   const scheduleMatches = [...allMatches].sort((a, b) => a.match_date - b.match_date);
+
+  const matchesByDay = scheduleMatches.reduce((acc, m) => {
+    const key = new Date(m.match_date * 1000).toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric",
+    });
+    (acc[key] ??= []).push(m);
+    return acc;
+  }, {} as Record<string, Match[]>);
+  const dayEntries = Object.entries(matchesByDay);
   const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup).sort((a, b) => a.match_date - b.match_date);
   const standings = computeStandings(groupMatches);
 
@@ -130,11 +139,19 @@ export default function FixturesPage() {
         )}
       </div>
 
-      {/* SCHEDULE VIEW — chronological all matches */}
+      {/* SCHEDULE VIEW — chronological, grouped by day */}
       {view === "schedule" && (
-        <div className="space-y-3">
-          {scheduleMatches.map(match => (
-            <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)} />
+        <div className="space-y-6">
+          {dayEntries.map(([day, dayMatches]) => (
+            <div key={day}>
+              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted">{day}</p>
+              <div className="space-y-3">
+                {dayMatches.map(match => (
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                    onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -154,7 +171,8 @@ export default function FixturesPage() {
 
           <div className="space-y-3 mb-6">
             {groupMatches.map(match => (
-              <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)} />
+              <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
             ))}
             {groupMatches.length === 0 && (
               <div className="py-12 text-center text-muted text-sm">No matches in Group {selectedWcGroup}</div>

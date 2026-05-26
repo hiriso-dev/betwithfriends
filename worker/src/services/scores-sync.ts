@@ -16,6 +16,7 @@ type FDMatch = {
   homeTeam: { name: string; tla: string };
   awayTeam: { name: string; tla: string };
   score: {
+    regularTime: { home: number | null; away: number | null } | null;
     fullTime: { home: number | null; away: number | null };
     winner: string | null;
   };
@@ -68,8 +69,9 @@ export async function syncScores(env: Env): Promise<void> {
     for (const m of data.matches) {
       const matchDate = Math.floor(new Date(m.utcDate).getTime() / 1000);
       const status = mapStatus(m.status);
-      const homeScore = m.score.fullTime.home;
-      const awayScore = m.score.fullTime.away;
+      // Use regularTime when available (knockout rounds may go to ET/pens — we score on 90 min result)
+      const homeScore = m.score.regularTime?.home ?? m.score.fullTime.home;
+      const awayScore = m.score.regularTime?.away ?? m.score.fullTime.away;
 
       const existing = await env.DB.prepare(
         "SELECT id, status, home_score, away_score FROM matches WHERE api_match_id = ?"

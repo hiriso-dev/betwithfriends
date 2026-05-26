@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 type Match = {
   id: string;
@@ -38,16 +40,35 @@ function fmtTime(ts: number): string {
   });
 }
 
+function ScoreBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-sm font-bold active:bg-accent/20 transition"
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function MatchCard({
   match,
   groupId,
   onBet,
+  onSaved,
 }: {
   match: Match;
   groupId?: string;
   onBet: () => void;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
+  const [quickMode, setQuickMode] = useState(false);
+  const [qHome, setQHome] = useState(match.my_bet?.home_score_pred ?? 0);
+  const [qAway, setQAway] = useState(match.my_bet?.away_score_pred ?? 0);
+  const [saving, setSaving] = useState(false);
+
   const now = Date.now();
   const kickoff = match.match_date * 1000;
   const minutesLeft = Math.floor((kickoff - now) / 60000);
@@ -55,6 +76,44 @@ export default function MatchCard({
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   const hasBet = !!match.my_bet;
+  const canBet = !!groupId && !isLocked && !isFinished && !isLive;
+
+  function enterQuick(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setQHome(match.my_bet?.home_score_pred ?? 0);
+    setQAway(match.my_bet?.away_score_pred ?? 0);
+    setQuickMode(true);
+  }
+
+  function cancelQuick(e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setQuickMode(false);
+  }
+
+  async function saveQuick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!groupId) return;
+    setSaving(true);
+    try {
+      await apiFetch("/api/bets", {
+        method: "POST",
+        body: JSON.stringify({
+          group_id: groupId,
+          match_id: match.id,
+          home_score_pred: qHome,
+          away_score_pred: qAway,
+          confidence: match.my_bet?.confidence ?? null,
+          double_up: match.my_bet?.double_up ?? 0,
+        }),
+      });
+      setQuickMode(false);
+      onSaved?.();
+    } catch {
+      // silent — user can retry or open full sheet
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const betResult = (() => {
     if (!isFinished || !match.my_bet || match.home_score === null) return null;
@@ -76,9 +135,10 @@ export default function MatchCard({
       className={`rounded-2xl border bg-surface p-4 transition ${
         isLive ? "border-success/50 shadow-[0_0_20px_rgba(34,197,94,0.1)]" :
         isFinished ? "border-border" :
-        "border-border active:border-accent/50 active:bg-surface-hover cursor-pointer"
+        canBet ? "border-border active:border-accent/50 active:bg-surface-hover cursor-pointer" :
+        "border-border"
       }`}
-      onClick={!isFinished && !isLive ? onBet : undefined}
+      onClick={canBet && !quickMode ? enterQuick : undefined}
     >
       {/* Header row */}
       <div className="mb-2 flex items-start justify-between text-xs text-muted">
@@ -137,10 +197,48 @@ export default function MatchCard({
         </button>
       </div>
 
-      {/* Bet info */}
+      {/* Bet area */}
       {groupId && (
         <div className="mt-3 pt-3 border-t border-border">
-          {hasBet ? (
+          {quickMode ? (
+            /* Quick bet entry */
+            <div className="flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5">
+                <ScoreBtn onClick={() => setQHome(Math.max(0, qHome - 1))}>−</ScoreBtn>
+                <span className="w-6 text-center font-black tabular-nums text-lg">{qHome}</span>
+                <ScoreBtn onClick={() => setQHome(qHome + 1)}>+</ScoreBtn>
+              </div>
+              <span className="text-muted font-semibold">–</span>
+              <div className="flex items-center gap-1.5">
+                <ScoreBtn onClick={() => setQAway(Math.max(0, qAway - 1))}>−</ScoreBtn>
+                <span className="w-6 text-center font-black tabular-nums text-lg">{qAway}</span>
+                <ScoreBtn onClick={() => setQAway(qAway + 1)}>+</ScoreBtn>
+              </div>
+              <div className="flex items-center gap-2 ml-1">
+                <button
+                  onClick={saveQuick}
+                  disabled={saving}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-[#0f0f23] font-bold text-sm transition active:scale-95 disabled:opacity-50"
+                >
+                  {saving ? "…" : "✓"}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); cancelQuick(); onBet(); }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border text-sm transition active:scale-95"
+                  title="Full bet sheet"
+                >
+                  ⚙
+                </button>
+                <button
+                  onClick={cancelQuick}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border text-xs text-muted transition active:scale-95"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ) : hasBet ? (
+            /* Existing bet display */
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-1.5 text-muted flex-wrap">
                 <span>Your bet:</span>
@@ -153,34 +251,48 @@ export default function MatchCard({
                 {match.my_bet!.double_up === 1 && (
                   <span className="text-xs bg-accent/15 text-accent rounded px-1">×2</span>
                 )}
-                {!isLocked && !isFinished && (
-                  <span className="text-xs text-accent underline cursor-pointer" onClick={(e) => { e.stopPropagation(); onBet(); }}>
-                    edit
-                  </span>
-                )}
               </div>
-              <div className="flex flex-col items-end gap-0.5">
-                {isFinished && match.my_bet?.points_earned !== null && (
-                  <span className={`font-bold text-sm ${resultColor}`}>
-                    {(match.my_bet!.points_earned! > 0 ? "+" : "") + match.my_bet!.points_earned!.toFixed(1) + "pts"}
-                  </span>
-                )}
-                {isFinished && betResult && (
-                  <span className={`text-xs ${resultColor}`}>{resultLabel}</span>
-                )}
+              <div className="flex items-center gap-2">
+                {isFinished ? (
+                  <div className="flex flex-col items-end gap-0.5">
+                    {match.my_bet?.points_earned !== null && (
+                      <span className={`font-bold text-sm ${resultColor}`}>
+                        {(match.my_bet!.points_earned! > 0 ? "+" : "") + match.my_bet!.points_earned!.toFixed(1) + "pts"}
+                      </span>
+                    )}
+                    {betResult && (
+                      <span className={`text-xs ${resultColor}`}>{resultLabel}</span>
+                    )}
+                  </div>
+                ) : !isLocked ? (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); enterQuick(e); }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-xs transition active:scale-95"
+                      title="Quick edit"
+                    >
+                      ✏
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onBet(); }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-hover border border-border text-xs transition active:scale-95"
+                      title="Full bet sheet"
+                    >
+                      ⚙
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
+          ) : !isLocked ? (
+            /* No bet yet — tap to quick-bet */
+            <button
+              onClick={(e) => { e.stopPropagation(); enterQuick(e); }}
+              className="w-full rounded-xl bg-accent/10 border border-accent/30 py-2 text-sm font-semibold text-accent transition active:bg-accent/20"
+            >
+              Tap to bet quickly · ⚙ for full options
+            </button>
           ) : (
-            !isLocked && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onBet(); }}
-                className="w-full rounded-xl bg-accent/10 border border-accent/30 py-2 text-sm font-semibold text-accent transition active:bg-accent/20"
-              >
-                Place bet
-              </button>
-            )
-          )}
-          {isLocked && !hasBet && !isFinished && (
             <p className="text-center text-xs text-muted">No prediction placed</p>
           )}
         </div>

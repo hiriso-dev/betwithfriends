@@ -21,7 +21,7 @@ export default function ProfilePage() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { canInstall, isIos, isStandalone, triggerInstall } = useInstallable();
+  const { mode: installMode, isStandalone, triggerInstall } = useInstallable();
 
   useEffect(() => {
     Promise.all([
@@ -153,43 +153,64 @@ export default function ProfilePage() {
       </div>
 
       {/* Install app */}
-      {!isStandalone && (
+      {isStandalone ? (
+        <div className="mb-4 rounded-2xl bg-surface border border-border px-4 py-3 flex items-center gap-3">
+          <span className="text-success text-xl">✓</span>
+          <div>
+            <p className="font-medium text-sm">App installed</p>
+            <p className="text-xs text-muted">Running as installed app</p>
+          </div>
+        </div>
+      ) : (
         <div className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <h2 className="font-semibold">Install App</h2>
             <p className="text-xs text-muted mt-0.5">Add BetWithFriends to your home screen</p>
           </div>
           <div className="p-4">
-            {canInstall ? (
+            {installMode === "prompt" && (
               <button
                 onClick={triggerInstall}
                 className="w-full rounded-xl bg-accent py-3 font-semibold text-[#0f0f23] transition active:scale-95"
               >
                 📲 Install app
               </button>
-            ) : isIos ? (
+            )}
+            {installMode === "ios-safari" && (
               <div className="text-sm text-muted space-y-2">
-                <p>Open this page in <strong className="text-foreground">Safari</strong> on your iPhone, then:</p>
-                <p>1. Tap the <strong className="text-foreground">Share ⬆️</strong> button at the bottom</p>
+                <p>1. Tap <strong className="text-foreground">Share ⬆</strong> at the bottom of Safari</p>
                 <p>2. Scroll down and tap <strong className="text-foreground">"Add to Home Screen"</strong></p>
                 <p>3. Tap <strong className="text-foreground">Add</strong></p>
               </div>
-            ) : (
-              <div className="text-sm text-muted space-y-2">
-                <p>In <strong className="text-foreground">Chrome</strong>:</p>
-                <p>Tap <strong className="text-foreground">⋮ Menu → "Install app"</strong> or look for the install icon <strong className="text-foreground">⊕</strong> in the address bar.</p>
-                <p className="text-[11px] mt-2 pt-2 border-t border-border">On iPhone, use <strong className="text-foreground">Safari</strong> → Share → Add to Home Screen.</p>
+            )}
+            {installMode === "ios-other" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  Safari is required to install on iPhone. Open this page in Safari first.
+                </p>
+                <a
+                  href={typeof window !== "undefined"
+                    ? window.location.href.replace(/^https:\/\//, "x-safari-https://").replace(/^http:\/\//, "x-safari-http://")
+                    : "#"}
+                  className="block w-full rounded-xl bg-accent py-3 text-center font-semibold text-[#0f0f23] transition active:scale-95"
+                >
+                  Open in Safari →
+                </a>
+                <p className="text-center text-xs text-muted">Then tap Share ⬆ → "Add to Home Screen"</p>
               </div>
             )}
-          </div>
-        </div>
-      )}
-      {isStandalone && (
-        <div className="mb-4 rounded-2xl bg-surface border border-border px-4 py-3 flex items-center gap-3">
-          <span className="text-success text-xl">✓</span>
-          <div>
-            <p className="font-medium text-sm">App installed</p>
-            <p className="text-xs text-muted">Running as installed app</p>
+            {installMode === "android-other" && (
+              <div className="text-sm text-muted space-y-2">
+                <p>Tap <strong className="text-foreground">⋮ Menu</strong> in your browser</p>
+                <p>Then tap <strong className="text-foreground">"Add to Home Screen"</strong> or{" "}
+                  <strong className="text-foreground">"Install app"</strong></p>
+              </div>
+            )}
+            {!installMode && (
+              <p className="text-sm text-muted text-center">
+                Use Chrome or Safari to install this app.
+              </p>
+            )}
           </div>
         </div>
       )}
