@@ -382,7 +382,7 @@ function BetSheet({
 
         {/* Confidence selector */}
         <div className="mb-4">
-          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence</p>
+          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence <span className="normal-case font-normal opacity-70">— optional</span></p>
           <div className="grid grid-cols-4 gap-2">
             {CONFIDENCE_OPTIONS.map(opt => (
               <button
@@ -420,7 +420,7 @@ function BetSheet({
               <p className={`font-semibold text-sm ${doubleUp ? "text-accent" : "text-foreground"}`}>
                 🎲 Double Up
               </p>
-              <p className="text-[10px] text-muted">×2 points if total is positive</p>
+              <p className="text-[10px] text-muted">Optional · ×2 points if total is positive</p>
             </div>
             <div className="text-right">
               <p className={`text-xs font-medium ${doubleUp ? "text-accent" : "text-muted"}`}>

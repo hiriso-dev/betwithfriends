@@ -239,6 +239,7 @@ export default function MatchCard({
           </div>
 
           {/* Confidence + Double Up */}
+          <p className="mb-1.5 text-center text-[10px] text-muted">Boost your bet — optional</p>
           <div className="mb-1 flex items-center justify-center gap-2">
             {CONFIDENCE_OPTIONS.map(({ value, emoji }) => (
               <button
@@ -265,6 +266,14 @@ export default function MatchCard({
               }`}
             >
               ×2
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setQuickMode(false); onBet(); }}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-xs font-bold text-muted transition active:border-accent active:text-accent"
+              title="Scoring options"
+            >
+              ?
             </button>
           </div>
 
@@ -306,13 +315,6 @@ export default function MatchCard({
                 ✕
               </button>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setQuickMode(false); onBet(); }}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border text-sm font-bold text-muted transition active:border-accent active:text-accent"
-              title="Scoring options"
-            >
-              ?
-            </button>
           </div>
         </div>
       ) : (

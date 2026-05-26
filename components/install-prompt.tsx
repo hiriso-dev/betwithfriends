@@ -97,9 +97,10 @@ export function InstallPrompt() {
         ✕
       </button>
       <div className="flex items-start gap-3">
-        <img src="/icons/icon-192.png" alt="" className="h-12 w-12 rounded-xl shrink-0" />
+        <img src="/favicon_bwf.png" alt="" className="h-12 w-12 rounded-xl shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm">Add to Home Screen</p>
+          <p className="font-bold text-sm">Install as an app</p>
+          <p className="text-[10px] text-muted">Add to Home Screen</p>
           {mode === "ios-safari" && (
             <p className="text-xs text-muted mt-1 leading-relaxed">
               Tap <strong className="text-foreground">Share ⬆</strong> then{" "}
