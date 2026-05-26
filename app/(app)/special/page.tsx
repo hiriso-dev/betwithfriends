@@ -195,34 +195,40 @@ export default function SpecialPage() {
       {/* Edit sheet */}
       {editingType && (
         <>
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setEditingType(null)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[70vh] overflow-y-auto">
-            <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
-            <h3 className="mt-3 mb-4 text-lg font-bold">
-              {SPECIAL_BET_TYPES.find((s) => s.type === editingType)?.label}
-            </h3>
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              {WC_TEAMS.map(({ name, code: tCode }) => (
-                <button
-                  key={name}
-                  onClick={() => setSelectedValue(name)}
-                  className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                    selectedValue === name
-                      ? "bg-accent text-[#0f0f23]"
-                      : "bg-surface-hover text-foreground border border-border active:border-accent"
-                  }`}
-                >
-                  <Flag code={tCode} /> {name}
-                </button>
-              ))}
+          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={() => setEditingType(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl max-h-[75vh] flex flex-col">
+            {/* Scrollable team list */}
+            <div className="overflow-y-auto flex-1 px-6 pt-6 pb-2">
+              <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
+              <h3 className="mt-3 mb-4 text-lg font-bold">
+                {SPECIAL_BET_TYPES.find((s) => s.type === editingType)?.label}
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {WC_TEAMS.map(({ name, code: tCode }) => (
+                  <button
+                    key={name}
+                    onClick={() => setSelectedValue(name)}
+                    className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                      selectedValue === name
+                        ? "bg-accent text-[#0f0f23]"
+                        : "bg-surface-hover text-foreground border border-border active:border-accent"
+                    }`}
+                  >
+                    <Flag code={tCode} /> {name}
+                  </button>
+                ))}
+              </div>
             </div>
-            <button
-              onClick={saveBet}
-              disabled={saving || !selectedValue}
-              className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : `Confirm: ${selectedValue || "—"}`}
-            </button>
+            {/* Sticky confirm button — always visible, never buried under scroll or nav */}
+            <div className="px-6 py-4 pb-safe border-t border-border bg-surface">
+              <button
+                onClick={saveBet}
+                disabled={saving || !selectedValue}
+                className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : `Confirm: ${selectedValue || "—"}`}
+              </button>
+            </div>
           </div>
         </>
       )}
