@@ -4,7 +4,10 @@ import { apiFetch } from "@/lib/api";
 import MatchCard from "@/components/match-card";
 import { HelpDialog, useHelpDialog } from "@/components/help-dialog";
 import { Flag } from "@/components/flag";
+import { AdminTestMatch } from "@/components/admin-test-match";
 import { useRouter } from "next/navigation";
+
+const ADMIN_EMAIL = "jerome.ladeveze@gmail.com";
 
 const WC_GROUPS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
@@ -22,6 +25,8 @@ type Match = {
 
 type Standing = { team: string; code: string; played: number; won: number; drawn: number; lost: number; gf: number; ga: number; gd: number; points: number };
 type Group = { id: string; name: string };
+type RankingMember = { user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number; is_me: boolean };
+type RankingsResponse = { members: RankingMember[]; last_match_day: string | null };
 
 function computeStandings(matches: Match[]): Standing[] {
   const map = new Map<string, Standing>();
@@ -48,12 +53,17 @@ export default function FixturesPage() {
   const router = useRouter();
   const { open: helpOpen, close: closeHelp, openHelp } = useHelpDialog();
   const [allMatches, setAllMatches] = useState<Match[]>([]);
-  const [view, setView] = useState<"schedule" | "groups">("schedule");
+  const [view, setView] = useState<"schedule" | "groups" | "rankings">("schedule");
   const [selectedWcGroup, setSelectedWcGroup] = useState("A");
   const [bettingGroupId, setBettingGroupId] = useState<string>("none");
   const [groups, setGroups] = useState<Group[]>([]);
   const [betTarget, setBetTarget] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [rankingGroupId, setRankingGroupId] = useState<string | null>(null);
+  const [rankingMembers, setRankingMembers] = useState<RankingMember[]>([]);
+  const [rankingLastDay, setRankingLastDay] = useState<string | null>(null);
+  const [rankingLoading, setRankingLoading] = useState(false);
 
   const loadMatches = useCallback((groupId: string) => {
     const path = groupId !== "none" ? `/api/matches?group_id=${groupId}` : "/api/matches";
@@ -61,18 +71,48 @@ export default function FixturesPage() {
   }, []);
 
   useEffect(() => {
-    apiFetch<Group[]>("/api/groups")
-      .then(async grps => {
+    Promise.all([
+      apiFetch<Group[]>("/api/groups"),
+      apiFetch<{ email: string }>("/api/auth/me").then(r => r.email).catch(() => null),
+    ])
+      .then(async ([grps, email]) => {
         setGroups(grps);
+        setUserEmail(email);
         const gid = grps[0]?.id ?? "none";
         if (grps.length > 0) setBettingGroupId(gid);
-        // Always load with group_id so my_bet is hydrated from the first fetch
         const matches = await loadMatches(gid);
         setAllMatches(matches);
       })
       .catch(() => router.push("/login"))
       .finally(() => setLoading(false));
   }, [router, loadMatches]);
+
+  // Seed rankingGroupId once groups are loaded
+  useEffect(() => {
+    if (rankingGroupId === null && groups.length > 0) {
+      setRankingGroupId(groups[0].id);
+    }
+  }, [groups, rankingGroupId]);
+
+  // Fetch rankings whenever the active group or tab changes
+  useEffect(() => {
+    if (view !== "rankings" || !rankingGroupId) return;
+    setRankingLoading(true);
+    apiFetch<RankingsResponse>(`/api/groups/${rankingGroupId}/rankings`)
+      .then(res => { setRankingMembers(res.members); setRankingLastDay(res.last_match_day); })
+      .catch(() => {})
+      .finally(() => setRankingLoading(false));
+  }, [view, rankingGroupId]);
+
+  // Auto-refresh every 30s when there are live or very-recent matches
+  useEffect(() => {
+    const hasLive = allMatches.some(m => m.status === "live");
+    if (!hasLive) return;
+    const t = setInterval(() => {
+      loadMatches(bettingGroupId).then(setAllMatches).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [allMatches, bettingGroupId, loadMatches]);
 
   useEffect(() => {
     if (loading) return;
@@ -105,6 +145,11 @@ export default function FixturesPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
+      {/* Admin test match panel */}
+      {userEmail === ADMIN_EMAIL && (
+        <AdminTestMatch onMatchChange={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+      )}
+
       {/* View toggle + betting group selector + help */}
       <div className="mb-4 flex items-center gap-2">
         <div className="flex rounded-xl bg-surface border border-border p-0.5 shrink-0">
@@ -119,6 +164,12 @@ export default function FixturesPage() {
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "groups" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
           >
             Groups
+          </button>
+          <button
+            onClick={() => setView("rankings")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${view === "rankings" ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+          >
+            Rankings
           </button>
         </div>
         <button
@@ -228,6 +279,78 @@ export default function FixturesPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* RANKINGS VIEW */}
+      {view === "rankings" && (
+        <div>
+          {groups.length === 0 && (
+            <div className="py-20 text-center text-sm text-muted">Join a group to see rankings</div>
+          )}
+
+          {/* Group selector */}
+          {groups.length > 1 && (
+            <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {groups.map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => setRankingGroupId(g.id)}
+                  className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                    rankingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"
+                  }`}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {rankingLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map(i => <div key={i} className="h-14 rounded-xl bg-surface animate-pulse" />)}
+            </div>
+          ) : rankingMembers.length === 0 ? (
+            <div className="py-20 text-center text-sm text-muted">No predictions yet in this group</div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                <h2 className="font-semibold text-sm">
+                  {groups.find(g => g.id === rankingGroupId)?.name ?? "Rankings"}
+                </h2>
+                <span className="text-[10px] text-muted">
+                  {rankingLastDay
+                    ? new Date(rankingLastDay).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                    : "latest"
+                  }
+                </span>
+              </div>
+              {rankingMembers.map((m) => {
+                const recent = m.recent_points;
+                const recentColor = recent > 0 ? "text-success" : recent < 0 ? "text-danger" : "text-muted";
+                const recentLabel = recent > 0 ? `+${recent.toFixed(1)}` : recent < 0 ? recent.toFixed(1) : "—";
+                const medal = m.rank === 1 ? "🥇" : m.rank === 2 ? "🥈" : m.rank === 3 ? "🥉" : null;
+                return (
+                  <div
+                    key={m.user_id}
+                    className={`flex items-center gap-3 px-4 py-3.5 border-b border-border last:border-0 ${m.is_me ? "bg-accent/5" : ""}`}
+                  >
+                    <span className={`w-7 shrink-0 text-center font-bold ${medal ? "text-lg" : "text-sm text-muted"}`}>
+                      {medal ?? m.rank}
+                    </span>
+                    <span className={`flex-1 font-medium truncate ${m.is_me ? "text-accent" : ""}`}>
+                      {m.pseudo}
+                      {m.is_me && <span className="ml-1 text-xs text-muted opacity-70">(you)</span>}
+                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`text-xs font-semibold tabular-nums ${recentColor}`}>{recentLabel}</span>
+                      <span className="font-bold tabular-nums">{Math.round(m.total_points)}pts</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Help dialog */}

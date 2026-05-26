@@ -111,15 +111,32 @@ export async function handleGroups(
     if (!member) return err("Not a member", 403, origin);
 
     const rows = await env.DB.prepare(`
-      SELECT user_id, pseudo, total_points,
-             ROW_NUMBER() OVER (ORDER BY total_points DESC) as rank
-      FROM group_members
-      WHERE group_id = ?
-      ORDER BY total_points DESC
-    `).bind(groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number }>();
+      SELECT gm.user_id, gm.pseudo, gm.total_points,
+             ROW_NUMBER() OVER (ORDER BY gm.total_points DESC) as rank,
+             COALESCE((
+               SELECT SUM(b.points_earned)
+               FROM bets b
+               JOIN matches m ON m.id = b.match_id
+               WHERE b.group_id = gm.group_id
+                 AND b.user_id = gm.user_id
+                 AND b.points_earned IS NOT NULL
+                 AND date(m.match_date, 'unixepoch') = (
+                   SELECT date(MAX(match_date), 'unixepoch')
+                   FROM matches
+                   WHERE status = 'finished'
+                 )
+             ), 0) as recent_points
+      FROM group_members gm
+      WHERE gm.group_id = ?
+      ORDER BY gm.total_points DESC
+    `).bind(groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number }>();
+
+    const lastDay = await env.DB.prepare(
+      "SELECT date(MAX(match_date), 'unixepoch') as day FROM matches WHERE status = 'finished'"
+    ).first<{ day: string | null }>();
 
     const result = rows.results.map((r) => ({ ...r, is_me: r.user_id === auth.userId }));
-    return json(result, 200, origin);
+    return json({ members: result, last_match_day: lastDay?.day ?? null }, 200, origin);
   }
 
   return err("Not found", 404, origin);

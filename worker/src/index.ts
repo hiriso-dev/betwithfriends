@@ -6,6 +6,7 @@ import { handleBets } from "./handlers/bets";
 import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { handleStandings } from "./handlers/standings";
+import { handleAdmin } from "./handlers/admin";
 import { syncScores, syncScorers } from "./services/scores-sync";
 import { processMatchResult } from "./services/scoring";
 import { sendPreGameReminders } from "./services/push-service";
@@ -73,6 +74,9 @@ export default {
       }
       if (pathname.startsWith("/api/standings") || pathname.startsWith("/api/scorers")) {
         return await handleStandings(request, env, url, auth, json, err, origin);
+      }
+      if (pathname.startsWith("/api/admin")) {
+        return await handleAdmin(request, env, url, auth, json, err, origin);
       }
 
       // Dev: manually trigger a competition sync (requires API key — use for UCL/other real match testing)

@@ -9,6 +9,7 @@ type Member = {
   pseudo: string;
   total_points: number;
   rank: number;
+  recent_points: number;
   is_me: boolean;
 };
 
@@ -34,10 +35,10 @@ export default function GroupDetailPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<GroupDetail>(`/api/groups/${params.id}`),
-      apiFetch<Member[]>(`/api/groups/${params.id}/rankings`),
-    ]).then(([g, m]) => {
+      apiFetch<{ members: Member[]; last_match_day: string | null }>(`/api/groups/${params.id}/rankings`),
+    ]).then(([g, rankings]) => {
       setGroup(g);
-      setMembers(m);
+      setMembers(rankings.members);
     }).catch(() => router.push("/groups"))
       .finally(() => setLoading(false));
   }, [params.id, router]);
