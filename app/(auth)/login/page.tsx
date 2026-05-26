@@ -35,9 +35,17 @@ export default function LoginPage() {
     <div className="flex min-h-full flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
-          <div className="mb-3 text-6xl">⚽</div>
-          <h1 className="text-2xl font-bold">BetWithFriends</h1>
-          <p className="mt-1 text-sm text-muted">World Cup 2026 · sign in to bet with your crew</p>
+          <img
+            src="/betWithFriendsLogo.png"
+            alt="BetWithFriends"
+            className="mx-auto mb-5 h-64 w-auto"
+          />
+          <h1 className="text-xl font-bold leading-snug">
+            Bet with your Friends on the<br />Coming World Cup 2026
+          </h1>
+          <p className="mt-2 text-sm font-medium text-accent">
+            Completely free · No ads
+          </p>
         </div>
 
         <div className="mb-4 grid grid-cols-2 rounded-xl border border-border bg-surface p-1 text-sm">

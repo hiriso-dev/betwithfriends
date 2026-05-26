@@ -11,6 +11,11 @@ export const metadata: Metadata = {
   description: "World Cup 2026 betting pools with friends",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "BetWithFriends" },
+  icons: {
+    icon: [{ url: "/favicon_bwf.png", type: "image/png" }],
+    shortcut: "/favicon_bwf.png",
+    apple: "/favicon_bwf.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -25,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${geist.variable} h-full`}>
       <head>
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/favicon_bwf.png" />
       </head>
       <body className="h-full bg-background text-foreground antialiased">
         <ServiceWorkerRegistrar />
