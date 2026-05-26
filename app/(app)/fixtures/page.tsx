@@ -61,17 +61,16 @@ export default function FixturesPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([
-      apiFetch<Group[]>("/api/groups"),
-      loadMatches("none"),
-    ]).then(([grps, matches]) => {
-      setGroups(grps);
-      setAllMatches(matches);
-      if (grps.length > 0) {
-        setBettingGroupId(grps[0].id);
-        loadMatches(grps[0].id).then(setAllMatches).catch(() => {});
-      }
-    }).catch(() => router.push("/login"))
+    apiFetch<Group[]>("/api/groups")
+      .then(async grps => {
+        setGroups(grps);
+        const gid = grps[0]?.id ?? "none";
+        if (grps.length > 0) setBettingGroupId(gid);
+        // Always load with group_id so my_bet is hydrated from the first fetch
+        const matches = await loadMatches(gid);
+        setAllMatches(matches);
+      })
+      .catch(() => router.push("/login"))
       .finally(() => setLoading(false));
   }, [router, loadMatches]);
 

@@ -59,79 +59,103 @@ export async function syncScores(env: Env, competitionCode = "WC"): Promise<void
     const res = await fetch(`${FOOTBALL_DATA_URL}/competitions/${competitionCode}/matches`, {
       headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY },
     });
-
     if (!res.ok) {
       console.error("Football data API error:", res.status, await res.text());
       return;
     }
 
     const data = await res.json<{ matches: FDMatch[] }>();
+    if (!data.matches?.length) return;
+
+    // 1. ONE query to fetch all existing matches — avoids N individual SELECTs
+    const apiIds = data.matches.map(m => String(m.id));
+    const placeholders = apiIds.map(() => "?").join(",");
+    const existingRows = await env.DB.prepare(
+      `SELECT id, api_match_id, status, home_score, away_score FROM matches WHERE api_match_id IN (${placeholders})`
+    ).bind(...apiIds).all<{ id: string; api_match_id: string; status: string; home_score: number | null; away_score: number | null }>();
+
+    const existingMap = new Map(existingRows.results.map(r => [r.api_match_id, r]));
+
+    // 2. Build all UPDATE/INSERT statements in memory, track matches that just finished
+    type ExRow = { id: string; api_match_id: string; status: string; home_score: number | null; away_score: number | null };
+    const statements: ReturnType<typeof env.DB.prepare>[] = [];
+    const justFinished: Array<{ ex: ExRow; homeScore: number; awayScore: number }> = [];
+    const firstSeenFinished: Array<{ newId: string }> = [];
 
     for (const m of data.matches) {
       const matchDate = Math.floor(new Date(m.utcDate).getTime() / 1000);
       const status = mapStatus(m.status);
-      // Use regularTime when available (knockout rounds may go to ET/pens — we score on 90 min result)
+      // Use regularTime when available (knockout rounds may go to ET/pens — we score on 90-min result)
       const homeScore = m.score.regularTime?.home ?? m.score.fullTime.home;
       const awayScore = m.score.regularTime?.away ?? m.score.fullTime.away;
+      const ex = existingMap.get(String(m.id));
 
-      const existing = await env.DB.prepare(
-        "SELECT id, status, home_score, away_score FROM matches WHERE api_match_id = ?"
-      ).bind(String(m.id)).first<{ id: string; status: string; home_score: number | null; away_score: number | null }>();
-
-      if (existing) {
-        const justFinished = existing.status !== "finished" && status === "finished";
-
-        // Always update team names/codes and match_date — knockout matches start with
-        // placeholder teams ("Winner Group A") and get real names as groups finish.
-        // Matches can also be rescheduled, which would break bet-locking if date is stale.
-        await env.DB.prepare(`
-          UPDATE matches SET
-            home_team = ?, away_team = ?,
-            home_team_code = ?, away_team_code = ?,
-            match_date = ?,
-            status = ?, home_score = ?, away_score = ?,
-            stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
-            updated_at = unixepoch()
-          WHERE api_match_id = ?
-        `).bind(
-          m.homeTeam.name, m.awayTeam.name,
-          m.homeTeam.tla, m.awayTeam.tla,
-          matchDate,
-          status, homeScore, awayScore,
-          m.venue ?? null, m.area?.name ?? null,
-          String(m.id)
-        ).run();
-
-        if (justFinished && homeScore !== null && awayScore !== null) {
-          const fullMatch: Match = { ...existing as unknown as Match, status, home_score: homeScore, away_score: awayScore };
-          await processMatchResult(env, fullMatch);
-          await sendMatchResultNotifications(env, fullMatch);
+      if (ex) {
+        const justFin = ex.status !== "finished" && status === "finished";
+        statements.push(
+          env.DB.prepare(`
+            UPDATE matches SET
+              home_team = ?, away_team = ?,
+              home_team_code = ?, away_team_code = ?,
+              match_date = ?,
+              status = ?, home_score = ?, away_score = ?,
+              stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
+              updated_at = unixepoch()
+            WHERE api_match_id = ?
+          `).bind(
+            m.homeTeam.name, m.awayTeam.name,
+            m.homeTeam.tla, m.awayTeam.tla,
+            matchDate, status, homeScore, awayScore,
+            m.venue ?? null, m.area?.name ?? null,
+            String(m.id)
+          )
+        );
+        if (justFin && homeScore !== null && awayScore !== null) {
+          justFinished.push({ ex, homeScore, awayScore });
         }
       } else {
         const newId = crypto.randomUUID();
-        await env.DB.prepare(`
-          INSERT INTO matches (id, api_match_id, home_team, away_team, home_team_code, away_team_code,
-            match_date, home_score, away_score, status, stage, group_name, stadium, venue_city)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          newId, String(m.id),
-          m.homeTeam.name, m.awayTeam.name,
-          m.homeTeam.tla, m.awayTeam.tla,
-          matchDate, homeScore, awayScore,
-          status, mapStage(m.stage), m.group,
-          m.venue ?? null, m.area?.name ?? null
-        ).run();
-
-        // Handle the case where the worker first sees a match that is already finished
-        // (e.g. after a cold start or missed sync window).
+        statements.push(
+          env.DB.prepare(`
+            INSERT INTO matches (id, api_match_id, home_team, away_team, home_team_code, away_team_code,
+              match_date, home_score, away_score, status, stage, group_name, stadium, venue_city)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            newId, String(m.id),
+            m.homeTeam.name, m.awayTeam.name,
+            m.homeTeam.tla, m.awayTeam.tla,
+            matchDate, homeScore, awayScore,
+            status, mapStage(m.stage), m.group,
+            m.venue ?? null, m.area?.name ?? null
+          )
+        );
         if (status === "finished" && homeScore !== null && awayScore !== null) {
-          const inserted = await env.DB.prepare("SELECT * FROM matches WHERE id = ?")
-            .bind(newId).first<Match>();
-          if (inserted) {
-            await processMatchResult(env, inserted);
-            await sendMatchResultNotifications(env, inserted);
-          }
+          firstSeenFinished.push({ newId });
         }
+      }
+    }
+
+    // 3. ONE batch write for all updates/inserts — avoids N individual awaits
+    if (statements.length > 0) {
+      await env.DB.batch(statements);
+    }
+
+    // 4. Score bets for matches that just crossed the finish line (rare — only on match end)
+    for (const { ex, homeScore, awayScore } of justFinished) {
+      const fullMatch = await env.DB.prepare("SELECT * FROM matches WHERE id = ?")
+        .bind(ex.id).first<Match>();
+      if (fullMatch) {
+        await processMatchResult(env, { ...fullMatch, home_score: homeScore, away_score: awayScore });
+        await sendMatchResultNotifications(env, { ...fullMatch, home_score: homeScore, away_score: awayScore });
+      }
+    }
+    // Handle first-seen-already-finished (cold start / missed sync window)
+    for (const { newId } of firstSeenFinished) {
+      const fullMatch = await env.DB.prepare("SELECT * FROM matches WHERE id = ?")
+        .bind(newId).first<Match>();
+      if (fullMatch) {
+        await processMatchResult(env, fullMatch);
+        await sendMatchResultNotifications(env, fullMatch);
       }
     }
   } catch (e) {
@@ -144,7 +168,6 @@ const SCORERS_INTERVAL = 30 * 60; // 30 min
 export async function syncScorers(env: Env): Promise<void> {
   if (!env.FOOTBALL_DATA_API_KEY) return;
 
-  // Rate limit
   const recent = await env.DB.prepare(
     "SELECT MAX(updated_at) as last FROM top_scorers"
   ).first<{ last: number | null }>();
@@ -157,17 +180,17 @@ export async function syncScorers(env: Env): Promise<void> {
     if (!res.ok) return;
 
     const data = await res.json<{ scorers: FDScorer[] }>();
-
-    for (const s of data.scorers) {
+    const statements = data.scorers.map(s => {
       const id = `${s.player.name}_${s.team.tla}`.replace(/\s+/g, "_");
-      await env.DB.prepare(`
+      return env.DB.prepare(`
         INSERT INTO top_scorers (id, player_name, team_name, team_code, goals, assists, penalties, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
         ON CONFLICT(player_name, team_code) DO UPDATE SET
           goals = excluded.goals, assists = excluded.assists,
           penalties = excluded.penalties, updated_at = unixepoch()
-      `).bind(id, s.player.name, s.team.name, s.team.tla, s.goals ?? 0, s.assists ?? 0, s.penalties ?? 0).run();
-    }
+      `).bind(id, s.player.name, s.team.name, s.team.tla, s.goals ?? 0, s.assists ?? 0, s.penalties ?? 0);
+    });
+    if (statements.length > 0) await env.DB.batch(statements);
   } catch (e) {
     console.error("syncScorers error:", e);
   }

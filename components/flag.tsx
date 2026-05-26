@@ -12,7 +12,10 @@ const CDN: Record<string, string> = {
   PAN: "pa", PAR: "py", PER: "pe", PHI: "ph", POL: "pl",
   POR: "pt", QAT: "qa", RSA: "za", SCO: "gb-sct", SEN: "sn",
   SRB: "rs", SUI: "ch", SWE: "se", TUR: "tr", UKR: "ua",
-  URU: "uy", USA: "us", VEN: "ve", WAL: "gb-wls",
+  URU: "uy", URY: "uy", USA: "us", UZB: "uz", VEN: "ve", WAL: "gb-wls",
+  // WC2026 qualifiers
+  ALG: "dz", BIH: "ba", COD: "cd", CPV: "cv", CUW: "cw",
+  CZE: "cz", HAI: "ht", IRQ: "iq", JOR: "jo", NOR: "no", TUN: "tn",
 };
 
 export function Flag({ code }: { code: string }) {

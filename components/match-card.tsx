@@ -98,6 +98,7 @@ export default function MatchCard({
   const [qConfidence, setQConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
   const [qDoubleUp, setQDoubleUp] = useState((match.my_bet?.double_up ?? 0) === 1);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function enterEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
@@ -117,6 +118,7 @@ export default function MatchCard({
     e.stopPropagation();
     if (!groupId) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await apiFetch("/api/bets", {
         method: "POST",
@@ -131,8 +133,8 @@ export default function MatchCard({
       });
       setQuickMode(false);
       onSaved?.();
-    } catch {
-      // silent
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save bet");
     } finally {
       setSaving(false);
     }
@@ -257,6 +259,9 @@ export default function MatchCard({
           </div>
 
           {/* Save + Cancel + Help */}
+          {saveError && (
+            <p className="mb-2 text-center text-xs text-danger">{saveError}</p>
+          )}
           <div className="flex gap-2 items-center">
             <button
               onClick={saveQuick}
