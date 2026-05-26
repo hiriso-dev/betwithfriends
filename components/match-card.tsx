@@ -28,9 +28,9 @@ type Match = {
 };
 
 const CONFIDENCE_OPTIONS = [
-  { value: "cautious",  emoji: "😬", label: "Cautious", pts: "±2" },
-  { value: "confident", emoji: "👍", label: "Confident", pts: "±5" },
-  { value: "reckless",  emoji: "🔥", label: "Reckless",  pts: "±10" },
+  { value: "cautious",  emoji: "😬", label: "Cautious", n: 2 },
+  { value: "confident", emoji: "👍", label: "Confident", n: 5 },
+  { value: "reckless",  emoji: "🔥", label: "Reckless",  n: 10 },
 ] as const;
 
 const CONFIDENCE_EMOJI: Record<string, string> = {
@@ -256,54 +256,49 @@ export default function MatchCard({
             </button>
           </div>
 
-          {/* Confidence + Double Up */}
-          <p className="mb-1.5 text-center text-[10px] text-muted">Boost your bet — optional</p>
-          <div className="mb-1 flex items-center justify-center gap-2">
-            {CONFIDENCE_OPTIONS.map(({ value, emoji }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setQConfidence(qConfidence === value ? null : value); }}
-                className={`h-10 w-10 rounded-full text-xl border-2 transition active:scale-95 ${
-                  qConfidence === value
-                    ? "border-accent bg-accent/15"
-                    : "border-border bg-surface-hover"
-                }`}
-              >
-                {emoji}
-              </button>
-            ))}
-            <div className="w-px h-6 bg-border mx-1" />
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setQDoubleUp(d => !d); }}
-              className={`rounded-full px-3.5 h-10 text-sm font-black border-2 transition active:scale-95 ${
-                qDoubleUp
-                  ? "bg-accent text-[#0f0f23] border-accent"
-                  : "border-border text-muted bg-surface-hover"
-              }`}
-            >
-              ×2
-            </button>
+          {/* Boost section — bordered */}
+          <div className="mb-3 rounded-xl border border-border p-3 relative">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setQuickMode(false); onBet(); }}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-xs font-bold text-muted transition active:border-accent active:text-accent"
+              className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full border border-border text-[9px] font-bold text-muted transition active:border-accent active:text-accent"
               title="Scoring options"
             >
               ?
             </button>
-          </div>
+            <p className="mb-3 text-center text-[10px] text-muted">Boost your bet — optional</p>
+            <div className="flex items-start justify-center gap-3">
+              {CONFIDENCE_OPTIONS.map(({ value, emoji, label, n }) => (
+                <div key={value} className="flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setQConfidence(qConfidence === value ? null : value); }}
+                    className={`h-10 w-10 rounded-full text-xl border-2 transition active:scale-95 ${
+                      qConfidence === value ? "border-accent bg-accent/15" : "border-border bg-surface-hover"
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                  <span className={`text-[9px] font-medium transition ${qConfidence === value ? "text-accent" : "text-muted"}`}>{label}</span>
+                  <span className={`text-[9px] transition ${qConfidence === value ? "text-accent" : "text-muted"}`}>+{n}/-{n}</span>
+                </div>
+              ))}
 
-          {/* Icon legend */}
-          <div className="mb-4 flex items-center justify-center gap-2 text-[10px] text-muted">
-            {CONFIDENCE_OPTIONS.map(({ value, label, pts }) => (
-              <span key={value} className={`transition ${qConfidence === value ? "text-accent font-semibold" : ""}`}>
-                {label} {pts}
-              </span>
-            ))}
-            <span className="mx-0.5 text-border">|</span>
-            <span className={qDoubleUp ? "text-accent font-semibold" : ""}>×2 if positive</span>
+              <div className="w-px self-stretch bg-border/60 mx-1" />
+
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setQDoubleUp(d => !d); }}
+                  className={`rounded-full px-3 h-10 text-sm font-black border-2 transition active:scale-95 ${
+                    qDoubleUp ? "bg-accent text-[#0f0f23] border-accent" : "border-border text-muted bg-surface-hover"
+                  }`}
+                >
+                  ×2
+                </button>
+                <span className={`text-[9px] font-medium transition ${qDoubleUp ? "text-accent" : "text-muted"}`}>if positive</span>
+              </div>
+            </div>
           </div>
 
           {/* Save + Cancel + Help */}
