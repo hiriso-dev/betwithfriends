@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import GroupInvite from "@/components/group-invite";
 
 type Group = {
   id: string;
@@ -17,6 +18,7 @@ export default function GroupsPage() {
   const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inviteFor, setInviteFor] = useState<Group | null>(null);
 
   useEffect(() => {
     apiFetch<Group[]>("/api/groups")
@@ -73,22 +75,39 @@ export default function GroupsPage() {
         <>
           <div className="space-y-3 mb-4">
             {groups.map((g) => (
-              <Link
+              <div
                 key={g.id}
-                href={`/groups/${g.id}`}
-                className="block rounded-2xl bg-surface border border-border p-4 transition active:scale-98"
+                className="relative rounded-2xl bg-surface border border-border transition active:scale-98"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">{g.name}</h3>
-                    <p className="text-sm text-muted mt-0.5">{g.member_count} members</p>
+                <Link href={`/groups/${g.id}`} className="block p-4 pr-14">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">{g.name}</h3>
+                      <p className="text-sm text-muted mt-0.5">{g.member_count} members</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-accent">{Math.round(g.my_points)}pts</p>
+                      <p className="text-xs text-muted">Rank #{g.my_rank}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-accent">{Math.round(g.my_points)}pts</p>
-                    <p className="text-xs text-muted">Rank #{g.my_rank}</p>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setInviteFor(g);
+                  }}
+                  aria-label={`Invite friends to ${g.name}`}
+                  className="absolute top-2 right-2 rounded-lg p-2 text-muted active:text-accent active:scale-95 transition"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                    <polyline points="16 6 12 2 8 6" />
+                    <line x1="12" y1="2" x2="12" y2="15" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
 
@@ -99,6 +118,14 @@ export default function GroupsPage() {
             + Join another group
           </Link>
         </>
+      )}
+
+      {inviteFor && (
+        <GroupInvite
+          groupName={inviteFor.name}
+          inviteCode={inviteFor.invite_code}
+          onClose={() => setInviteFor(null)}
+        />
       )}
     </div>
   );
