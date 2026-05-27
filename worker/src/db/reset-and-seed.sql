@@ -7,6 +7,7 @@
 PRAGMA foreign_keys = OFF;
 
 DROP TABLE IF EXISTS notification_prefs;
+DROP TABLE IF EXISTS notification_deliveries;
 DROP TABLE IF EXISTS push_subscriptions;
 DROP TABLE IF EXISTS special_bets;
 DROP TABLE IF EXISTS bets;
@@ -124,12 +125,22 @@ CREATE TABLE notification_prefs (
   result_after_game INTEGER DEFAULT 1
 );
 
+CREATE TABLE notification_deliveries (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  match_id TEXT NOT NULL REFERENCES matches(id),
+  delivery_type TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()),
+  UNIQUE(user_id, match_id, delivery_type)
+);
+
 -- Indexes
 CREATE INDEX idx_bets_match ON bets(match_id);
 CREATE INDEX idx_bets_user_group ON bets(user_id, group_id);
 CREATE INDEX idx_group_members_group ON group_members(group_id);
 CREATE INDEX idx_matches_date ON matches(match_date);
 CREATE INDEX idx_matches_status ON matches(status);
+CREATE INDEX idx_notification_deliveries_match ON notification_deliveries(match_id, delivery_type);
 
 -- ============================================================
 -- WC 2026 Group Stage Fixtures seed

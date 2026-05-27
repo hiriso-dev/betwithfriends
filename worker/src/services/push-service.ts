@@ -1,102 +1,211 @@
 import { Env, Match } from "../types";
 
+type PushPayload = {
+  title: string;
+  body: string;
+  icon?: string;
+  badge?: string;
+  tag?: string;
+  url?: string;
+};
+
 type PushSubscription = {
   endpoint: string;
   keys: { p256dh: string; auth: string };
 };
 
-async function buildVapidHeaders(
-  env: Env,
-  audience: string
-): Promise<Record<string, string>> {
-  const exp = Math.floor(Date.now() / 1000) + 12 * 3600;
-  const headerB64 = btoa(JSON.stringify({ typ: "JWT", alg: "ES256" }))
-    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-  const payloadB64 = btoa(JSON.stringify({ aud: audience, exp, sub: env.VAPID_SUBJECT }))
-    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+type PushSendOptions = {
+  topic: string;
+  urgency?: "very-low" | "low" | "normal" | "high";
+  ttl?: number;
+};
 
-  const privateKeyBytes = Uint8Array.from(
-    atob(env.VAPID_PRIVATE_KEY.replace(/-/g, "+").replace(/_/g, "/")),
-    (c) => c.charCodeAt(0)
-  );
+type GeneratedPushRequest = {
+  endpoint: string;
+  method: string;
+  headers: Record<string, string | number>;
+  body?: ArrayBuffer | ArrayBufferView | null;
+};
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8", privateKeyBytes.buffer,
-    { name: "ECDSA", namedCurve: "P-256" },
-    false, ["sign"]
-  );
+type GenerateRequestDetailsFn = (
+  subscription: PushSubscription,
+  payload?: string,
+  options?: {
+    TTL?: number;
+    urgency?: "very-low" | "low" | "normal" | "high";
+    topic?: string;
+    vapidDetails?: {
+      subject: string;
+      publicKey: string;
+      privateKey: string;
+    };
+  }
+) => GeneratedPushRequest;
 
-  const sig = await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" },
-    cryptoKey,
-    new TextEncoder().encode(`${headerB64}.${payloadB64}`)
-  );
+type PushSendResult = {
+  ok: boolean;
+  permanentFailure: boolean;
+};
 
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+let webPushRequestDetailsPromise: Promise<GenerateRequestDetailsFn> | null = null;
 
-  const jwt = `${headerB64}.${payloadB64}.${sigB64}`;
+function getGenerateRequestDetails(): Promise<GenerateRequestDetailsFn> {
+  if (!webPushRequestDetailsPromise) {
+    webPushRequestDetailsPromise = import("web-push").then((mod) => {
+      const candidate = mod as unknown as {
+        generateRequestDetails?: GenerateRequestDetailsFn;
+        default?: { generateRequestDetails?: GenerateRequestDetailsFn };
+      };
 
-  return {
-    Authorization: `vapid t=${jwt}, k=${env.VAPID_PUBLIC_KEY}`,
-    "Content-Type": "application/json",
-    TTL: "86400",
-  };
+      const fn = candidate.generateRequestDetails ?? candidate.default?.generateRequestDetails;
+      if (!fn) {
+        throw new Error("web-push generateRequestDetails is unavailable");
+      }
+
+      return fn;
+    });
+  }
+
+  return webPushRequestDetailsPromise;
 }
 
-async function sendPush(env: Env, sub: PushSubscription, payload: object): Promise<void> {
-  const url = new URL(sub.endpoint);
-  const audience = `${url.protocol}//${url.host}`;
-  const headers = await buildVapidHeaders(env, audience);
+async function reserveDelivery(
+  env: Env,
+  userId: string,
+  matchId: string,
+  deliveryType: "pre_game" | "result"
+): Promise<boolean> {
+  const result = await env.DB.prepare(`
+    INSERT OR IGNORE INTO notification_deliveries (id, user_id, match_id, delivery_type)
+    VALUES (?, ?, ?, ?)
+  `).bind(crypto.randomUUID(), userId, matchId, deliveryType).run();
 
-  const body = JSON.stringify(payload);
-  const res = await fetch(sub.endpoint, { method: "POST", headers, body });
+  return (result.meta?.changes ?? 0) > 0;
+}
 
-  if (res.status === 410 || res.status === 404) {
-    // Subscription expired — delete it
-    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").bind(sub.endpoint).run();
+async function releaseDelivery(
+  env: Env,
+  userId: string,
+  matchId: string,
+  deliveryType: "pre_game" | "result"
+): Promise<void> {
+  await env.DB.prepare(`
+    DELETE FROM notification_deliveries
+    WHERE user_id = ? AND match_id = ? AND delivery_type = ?
+  `).bind(userId, matchId, deliveryType).run();
+}
+
+async function sendPush(
+  env: Env,
+  sub: PushSubscription,
+  payload: PushPayload,
+  options: PushSendOptions
+): Promise<PushSendResult> {
+  try {
+    const generateRequestDetails = await getGenerateRequestDetails();
+    const requestDetails = generateRequestDetails(sub, JSON.stringify(payload), {
+      TTL: options.ttl ?? 3600,
+      topic: options.topic,
+      urgency: options.urgency ?? "normal",
+      vapidDetails: {
+        subject: env.VAPID_SUBJECT,
+        publicKey: env.VAPID_PUBLIC_KEY,
+        privateKey: env.VAPID_PRIVATE_KEY,
+      },
+    });
+
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(requestDetails.headers)) {
+      headers.set(key, String(value));
+    }
+
+    const res = await fetch(requestDetails.endpoint, {
+      method: requestDetails.method,
+      headers,
+      body: requestDetails.body ?? undefined,
+    });
+
+    if (res.status === 404 || res.status === 410) {
+      await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
+        .bind(sub.endpoint)
+        .run();
+      return { ok: false, permanentFailure: true };
+    }
+
+    if (!res.ok) {
+      console.error("sendPush failed", res.status, await res.text());
+      return { ok: false, permanentFailure: false };
+    }
+
+    return { ok: true, permanentFailure: false };
+  } catch (error) {
+    console.error("sendPush error", error);
+    return { ok: false, permanentFailure: false };
   }
 }
 
 export async function sendMatchResultNotifications(env: Env, match: Match): Promise<void> {
-  // Get all users who bet on this match and have result notifications enabled
+  // Send results to all subscribed users, with extra scoring context when they placed a bet.
   const rows = await env.DB.prepare(`
-    SELECT DISTINCT b.user_id, ps.subscription_json,
-           b.home_score_pred, b.away_score_pred, b.points_earned,
-           gm.pseudo
-    FROM bets b
-    JOIN notification_prefs np ON np.user_id = b.user_id AND np.result_after_game = 1
-    JOIN push_subscriptions ps ON ps.user_id = b.user_id
-    JOIN group_members gm ON gm.user_id = b.user_id AND gm.group_id = b.group_id
-    WHERE b.match_id = ?
+    SELECT
+      ps.user_id,
+      ps.subscription_json,
+      COUNT(b.id) AS bet_count,
+      SUM(COALESCE(b.points_earned, 0)) AS total_points,
+      MIN(b.home_score_pred) AS sample_home_score_pred,
+      MIN(b.away_score_pred) AS sample_away_score_pred
+    FROM push_subscriptions ps
+    JOIN notification_prefs np ON np.user_id = ps.user_id AND np.result_after_game = 1
+    LEFT JOIN bets b ON b.user_id = ps.user_id AND b.match_id = ?
+    GROUP BY ps.user_id, ps.subscription_json
   `).bind(match.id).all<{
     user_id: string;
     subscription_json: string;
-    home_score_pred: number;
-    away_score_pred: number;
-    points_earned: number | null;
-    pseudo: string;
+    bet_count: number;
+    total_points: number | null;
+    sample_home_score_pred: number | null;
+    sample_away_score_pred: number | null;
   }>();
 
   for (const row of rows.results) {
-    const sub = JSON.parse(row.subscription_json) as PushSubscription;
-    const pts = row.points_earned ?? 0;
-    const body = pts > 0
-      ? `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team} · You earned +${pts.toFixed(1)}pts 🎉`
-      : `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team} · Your prediction: ${row.home_score_pred}–${row.away_score_pred}`;
+    const reserved = await reserveDelivery(env, row.user_id, match.id, "result");
+    if (!reserved) continue;
 
-    await sendPush(env, sub, {
+    const sub = JSON.parse(row.subscription_json) as PushSubscription;
+    const pts = row.total_points ?? 0;
+
+    let body = `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`;
+    if (row.bet_count === 1 && row.sample_home_score_pred !== null && row.sample_away_score_pred !== null) {
+      body = pts > 0
+        ? `${body} · You earned +${pts.toFixed(1)}pts 🎉`
+        : `${body} · Your prediction: ${row.sample_home_score_pred}–${row.sample_away_score_pred}`;
+    } else if (row.bet_count > 1) {
+      body = pts > 0
+        ? `${body} · You earned +${pts.toFixed(1)}pts across ${row.bet_count} groups 🎉`
+        : `${body} · Open the app to review your bets across ${row.bet_count} groups`;
+    }
+
+    const result = await sendPush(env, sub, {
       title: "⚽ Match result",
       body,
       icon: "/icons/icon-192.png",
-      badge: "/icons/badge-72.png",
+      badge: "/icons/icon-192.png",
       tag: `result-${match.id}`,
-    }).catch(() => {});
+      url: "/fixtures",
+    }, {
+      topic: `result-${match.id}`,
+      urgency: "high",
+      ttl: 6 * 3600,
+    });
+
+    if (!result.ok && !result.permanentFailure) {
+      await releaseDelivery(env, row.user_id, match.id, "result");
+    }
   }
 }
 
 export async function sendPreGameReminders(env: Env): Promise<void> {
-  // Find matches starting in 50–70 minutes that have unbetted users
+  // Find matches starting in about an hour.
   const soon = Math.floor(Date.now() / 1000) + 60 * 60;
   const windowStart = soon - 10 * 60;
   const windowEnd = soon + 10 * 60;
@@ -119,13 +228,57 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
     `).bind(match.id).all<{ user_id: string; subscription_json: string }>();
 
     for (const row of rows.results) {
+      const reserved = await reserveDelivery(env, row.user_id, match.id, "pre_game");
+      if (!reserved) continue;
+
       const sub = JSON.parse(row.subscription_json) as PushSubscription;
-      await sendPush(env, sub, {
+      const result = await sendPush(env, sub, {
         title: "⏰ Game in 1 hour!",
         body: `${match.home_team} vs ${match.away_team} — place your prediction now`,
         icon: "/icons/icon-192.png",
         tag: `reminder-${match.id}`,
-      }).catch(() => {});
+        url: "/fixtures",
+      }, {
+        topic: `reminder-${match.id}`,
+        urgency: "high",
+        ttl: 90 * 60,
+      });
+
+      if (!result.ok && !result.permanentFailure) {
+        await releaseDelivery(env, row.user_id, match.id, "pre_game");
+      }
     }
   }
+}
+
+export async function sendTestNotification(env: Env, userId: string): Promise<number> {
+  const rows = await env.DB.prepare(`
+    SELECT subscription_json
+    FROM push_subscriptions
+    WHERE user_id = ?
+  `).bind(userId).all<{ subscription_json: string }>();
+
+  let sent = 0;
+
+  for (const row of rows.results) {
+    const sub = JSON.parse(row.subscription_json) as PushSubscription;
+    const result = await sendPush(env, sub, {
+      title: "Test notification",
+      body: "BetWithFriends notifications are working on this device.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: `test-${userId}`,
+      url: "/profile",
+    }, {
+      topic: "test-notification",
+      urgency: "high",
+      ttl: 5 * 60,
+    });
+
+    if (result.ok) {
+      sent += 1;
+    }
+  }
+
+  return sent;
 }

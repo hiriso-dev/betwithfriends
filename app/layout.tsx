@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} h-full`}>
+    <html lang="en" className={`${geist.variable} h-full`} suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/favicon_bwf.png" />
       </head>

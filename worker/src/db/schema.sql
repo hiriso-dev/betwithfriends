@@ -97,8 +97,18 @@ CREATE TABLE IF NOT EXISTS notification_prefs (
   result_after_game INTEGER DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  match_id TEXT NOT NULL REFERENCES matches(id),
+  delivery_type TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()),
+  UNIQUE(user_id, match_id, delivery_type)
+);
+
 CREATE INDEX IF NOT EXISTS idx_bets_match ON bets(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_user_group ON bets(user_id, group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
+CREATE INDEX IF NOT EXISTS idx_notification_deliveries_match ON notification_deliveries(match_id, delivery_type);

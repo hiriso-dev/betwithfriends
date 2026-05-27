@@ -1,5 +1,5 @@
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
-const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://192.168.68.94:8787";
 
 function resolveApiBase() {
   if (typeof window === "undefined") return RAW_API_BASE;
@@ -26,9 +26,16 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return arr.buffer as ArrayBuffer;
 }
 
+export async function getPushSubscription(): Promise<PushSubscription | null> {
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return null;
+  return reg.pushManager.getSubscription();
+}
+
 export async function subscribePush(): Promise<void> {
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({
+  const existing = await reg.pushManager.getSubscription();
+  const sub = existing ?? await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
   });

@@ -19,27 +19,111 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [prefs, setPrefs] = useState<NotifPrefs>({ remind_before_game: true, result_after_game: true });
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushSupported, setPushSupported] = useState(true);
+  const [pushBlockedReason, setPushBlockedReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
   const { mode: installMode, isStandalone, triggerInstall } = useInstallable();
 
   useEffect(() => {
+    let cancelled = false;
+
     Promise.all([
       apiFetch<UserProfile>("/api/auth/me"),
       apiFetch<NotifPrefs>("/api/push/prefs"),
     ]).then(([p, n]) => {
+      if (cancelled) return;
       setProfile(p);
       setPrefs(n);
     }).catch(() => router.push("/login"))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
 
-    if (typeof window !== "undefined" && "Notification" in window) {
-      setPushEnabled(Notification.permission === "granted");
-    }
+    void (async () => {
+      if (typeof window === "undefined") return;
+
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        !!(navigator as { standalone?: boolean }).standalone;
+
+      if (!window.isSecureContext) {
+        if (!cancelled) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          setPushBlockedReason(
+            standalone
+              ? "This home-screen app is running over HTTP. On iPhone and iPad, notifications only work when the app is opened from Safari over HTTPS."
+              : "Push notifications require HTTPS."
+          );
+        }
+        return;
+      }
+
+      if (!("Notification" in window)) {
+        if (!cancelled) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          setPushBlockedReason("This browser does not expose the Notifications API in this context.");
+        }
+        return;
+      }
+
+      if (!("serviceWorker" in navigator)) {
+        if (!cancelled) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          setPushBlockedReason("This browser does not expose service workers in this context.");
+        }
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const supported = "pushManager" in registration;
+
+        if (!cancelled) {
+          setPushSupported(supported);
+        }
+
+        if (!supported) {
+          if (!cancelled) {
+            setPushEnabled(false);
+            setPushBlockedReason(
+              standalone
+                ? "This standalone app still does not expose the Push API. On iPhone and iPad, use Safari 16.4+ and install from Safari over HTTPS."
+                : "This browser does not expose the Push API in this context."
+            );
+          }
+          return;
+        }
+
+        const { getPushSubscription } = await import("@/lib/push");
+        const subscription = await getPushSubscription();
+        if (!cancelled) {
+          setPushBlockedReason(null);
+          setPushEnabled(Notification.permission === "granted" && subscription !== null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          setPushBlockedReason("Service worker registration is not available yet. Reload the app and try again.");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   async function enablePush() {
-    if (!("serviceWorker" in navigator)) return;
+    if (!pushSupported) return;
     const perm = await Notification.requestPermission();
     if (perm !== "granted") return;
     try {
@@ -62,6 +146,27 @@ export default function ProfilePage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendPushTest() {
+    setTesting(true);
+    setTestMessage(null);
+
+    try {
+      const result = await apiFetch<{ ok: true; sent: number }>("/api/push/test", {
+        method: "POST",
+      });
+
+      setTestMessage(
+        result.sent === 1
+          ? "Test notification sent."
+          : `Test notification sent to ${result.sent} devices.`
+      );
+    } catch (error) {
+      setTestMessage(error instanceof Error ? error.message : "Unable to send test notification.");
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -120,7 +225,13 @@ export default function ProfilePage() {
           <h2 className="font-semibold">Notifications</h2>
         </div>
 
-        {!pushEnabled ? (
+        {!pushSupported ? (
+          <div className="p-4">
+            <p className="text-sm text-muted">
+              {pushBlockedReason ?? "Push notifications need a browser with Push API support. On iPhone and iPad, install the app to the home screen in Safari first."}
+            </p>
+          </div>
+        ) : !pushEnabled ? (
           <div className="p-4">
             <p className="mb-3 text-sm text-muted">
               Enable push notifications to get reminders before games and results after.
@@ -148,6 +259,21 @@ export default function ProfilePage() {
               onChange={(v) => savePrefs({ result_after_game: v })}
               disabled={saving}
             />
+            <div className="px-4 py-4">
+              <p className="mb-3 text-sm text-muted">
+                Send a real push notification now to confirm this device is set up correctly.
+              </p>
+              <button
+                onClick={sendPushTest}
+                disabled={testing}
+                className="w-full rounded-xl border border-border bg-surface-hover py-3 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {testing ? "Sending test..." : "Send test notification"}
+              </button>
+              {testMessage && (
+                <p className="mt-3 text-sm text-muted">{testMessage}</p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -157,8 +283,8 @@ export default function ProfilePage() {
         <div className="mb-4 rounded-2xl bg-surface border border-border px-4 py-3 flex items-center gap-3">
           <span className="text-success text-xl">✓</span>
           <div>
-            <p className="font-medium text-sm">App installed</p>
-            <p className="text-xs text-muted">Running as installed app</p>
+            <p className="font-medium text-sm">{pushSupported ? "App installed" : "Added to Home Screen"}</p>
+            <p className="text-xs text-muted">{pushSupported ? "Running as installed app" : "Running in standalone mode"}</p>
           </div>
         </div>
       ) : (
@@ -179,7 +305,7 @@ export default function ProfilePage() {
             {installMode === "ios-safari" && (
               <div className="text-sm text-muted space-y-2">
                 <p>1. Tap <strong className="text-foreground">Share ⬆</strong> at the bottom of Safari</p>
-                <p>2. Scroll down and tap <strong className="text-foreground">"Add to Home Screen"</strong></p>
+                <p>2. Scroll down and tap <strong className="text-foreground">&quot;Add to Home Screen&quot;</strong></p>
                 <p>3. Tap <strong className="text-foreground">Add</strong></p>
               </div>
             )}
@@ -196,14 +322,14 @@ export default function ProfilePage() {
                 >
                   Open in Safari →
                 </a>
-                <p className="text-center text-xs text-muted">Then tap Share ⬆ → "Add to Home Screen"</p>
+                <p className="text-center text-xs text-muted">Then tap Share ⬆ → &quot;Add to Home Screen&quot;</p>
               </div>
             )}
             {installMode === "android-other" && (
               <div className="text-sm text-muted space-y-2">
                 <p>Tap <strong className="text-foreground">⋮ Menu</strong> in your browser</p>
-                <p>Then tap <strong className="text-foreground">"Add to Home Screen"</strong> or{" "}
-                  <strong className="text-foreground">"Install app"</strong></p>
+                <p>Then tap <strong className="text-foreground">&quot;Add to Home Screen&quot;</strong> or{" "}
+                  <strong className="text-foreground">&quot;Install app&quot;</strong></p>
               </div>
             )}
             {!installMode && (

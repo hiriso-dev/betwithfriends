@@ -1,4 +1,5 @@
 import { Env, AuthContext } from "../types";
+import { sendTestNotification } from "../services/push-service";
 
 type JsonFn = (data: unknown, status?: number, origin?: string) => Response;
 type ErrFn = (msg: string, status?: number, origin?: string) => Response;
@@ -40,6 +41,13 @@ export async function handleNotifications(
     await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?")
       .bind(endpoint, auth.userId).run();
     return json({ ok: true }, 200, origin);
+  }
+
+  // POST /api/push/test
+  if (pathname === "/api/push/test" && request.method === "POST") {
+    const sent = await sendTestNotification(env, auth.userId);
+    if (sent === 0) return err("No active push subscription found for this account", 400, origin);
+    return json({ ok: true, sent }, 200, origin);
   }
 
   // GET /api/push/prefs

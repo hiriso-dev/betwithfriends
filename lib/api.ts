@@ -1,4 +1,4 @@
-const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8787";
+const RAW_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://192.168.68.94:8787";
 
 function resolveApiBase() {
   if (typeof window === "undefined") return RAW_API_BASE;
