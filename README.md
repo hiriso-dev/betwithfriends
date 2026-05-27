@@ -16,15 +16,15 @@ A PWA for betting on World Cup 2026 matches with your friends. Create groups, pr
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16 (App Router), Tailwind CSS 4 |
-| Backend | Cloudflare Worker (Hono-less, raw fetch handler) |
-| Database | Cloudflare D1 (SQLite) |
-| Hosting | Cloudflare Workers (frontend via `@opennextjs/cloudflare`) |
-| Auth | Email + password, JWT HS256 cookie |
-| Push | Web Push (VAPID) |
-| Score data | football-data.org API (free tier) |
+| Layer      | Technology                                                 |
+| ---------- | ---------------------------------------------------------- |
+| Frontend   | Next.js 16 (App Router), Tailwind CSS 4                    |
+| Backend    | Cloudflare Worker (Hono-less, raw fetch handler)           |
+| Database   | Cloudflare D1 (SQLite)                                     |
+| Hosting    | Cloudflare Workers (frontend via `@opennextjs/cloudflare`) |
+| Auth       | Email + password, JWT HS256 cookie                         |
+| Push       | Web Push (VAPID)                                           |
+| Score data | football-data.org API (free tier)                          |
 
 ## Local development
 
@@ -72,6 +72,7 @@ npm run dev           # Next.js on http://localhost:3000
 ### Environment variables
 
 `.env.local`:
+
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8787
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=<your public VAPID key>
@@ -111,20 +112,20 @@ Scoring is based on the **90-minute result only** (extra time and penalties are 
 
 Bets lock **5 minutes before kickoff**.
 
-| Outcome | Points |
-|---|---|
-| Correct result (winner or draw) | +10 |
-| Exact score (bonus) | +5 |
-| Wrong | 0 |
+| Outcome                         | Points |
+| ------------------------------- | ------ |
+| Correct result (winner or draw) | +10    |
+| Exact score (bonus)             | +5     |
+| Wrong                           | 0      |
 
 **Confidence modifier** (additive):
 
-| Level | Correct | Wrong |
-|---|---|---|
-| None | +0 | 0 |
-| Cautious 😬 | +2 | −2 |
-| Confident 👍 | +5 | −5 |
-| Reckless 🔥 | +10 | −10 |
+| Level        | Correct | Wrong |
+| ------------ | ------- | ----- |
+| None         | +0      | 0     |
+| Cautious 😬  | +2      | −2    |
+| Confident 👍 | +5      | −5    |
+| Reckless 🔥  | +10     | −10   |
 
 **Double Up**: multiplies total × 2 (only if positive). Max 2 Double Ups per user per group.
 
@@ -166,10 +167,12 @@ npm run cf:deploy                  # build + deploy frontend
 The workflow in `.github/workflows/deploy-cloudflare.yml` deploys both workers on push to `main`.
 
 **GitHub Secrets** (Settings → Secrets → Actions):
+
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
 **GitHub Variables** (Settings → Variables → Actions):
+
 - `NEXT_PUBLIC_API_URL` — deployed API worker URL
 - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — must match the VAPID key on the worker
 
