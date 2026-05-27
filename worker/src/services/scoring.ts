@@ -76,9 +76,12 @@ export async function processMatchResult(env: Env, match: Match): Promise<void> 
       await env.DB.prepare("UPDATE bets SET points_earned = ? WHERE id = ?")
         .bind(pts, bet.id).run();
 
-      await env.DB.prepare(
-        "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
-      ).bind(pts, group_id, bet.user_id).run();
+      // Preview matches: show points on the bet card but don't affect the leaderboard
+      if (!match.preview) {
+        await env.DB.prepare(
+          "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
+        ).bind(pts, group_id, bet.user_id).run();
+      }
     }
   }
 }

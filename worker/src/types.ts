@@ -33,6 +33,7 @@ export type Match = {
   stadium: string | null;
   venue_city: string | null;
   updated_at: number;
+  preview: number | null; // 1 = points shown but NOT added to leaderboard
 };
 
 export type TopScorer = {

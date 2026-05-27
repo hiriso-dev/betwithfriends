@@ -16,6 +16,7 @@ type Match = {
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string;
   group_name: string | null;
+  preview?: number | null;
   stadium: string | null;
   venue_city: string | null;
   my_bet?: {
@@ -202,8 +203,11 @@ export default function MatchCard({
       {/* Header */}
       <div className="mb-2 flex items-start justify-between text-xs text-muted">
         <div>
-          <span className="uppercase tracking-wide font-medium">
+          <span className="uppercase tracking-wide font-medium flex items-center gap-1.5">
             {match.group_name ? `Group ${match.group_name}` : match.stage}
+            {match.preview === 1 && (
+              <span className="normal-case text-[9px] font-bold text-warning bg-warning/10 border border-warning/30 rounded px-1 py-0.5 tracking-normal">Exhibition</span>
+            )}
           </span>
           {(match.stadium || match.venue_city) && (
             <p className="mt-0.5 text-[10px] truncate max-w-[160px]">
@@ -232,12 +236,12 @@ export default function MatchCard({
         <div onClick={(e) => e.stopPropagation()}>
           <div className="flex items-start justify-between gap-2 mb-3">
             <button
-              className="flex-1 text-right pt-3 active:opacity-60"
+              className="flex-1 min-w-0 text-center pt-3 active:opacity-60"
               onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.home_team_code}`); }}
             >
               <p className="text-3xl leading-none mb-0.5"><Flag code={match.home_team_code} /></p>
               <p className="text-xs font-bold uppercase tracking-wider text-muted">{match.home_team_code}</p>
-              <p className="text-[11px] text-muted leading-tight truncate">{match.home_team}</p>
+              <p className="text-[11px] text-muted leading-tight line-clamp-2 break-words">{match.home_team}</p>
             </button>
 
             <div className="flex items-start gap-3">
@@ -247,12 +251,12 @@ export default function MatchCard({
             </div>
 
             <button
-              className="flex-1 text-left pt-3 active:opacity-60"
+              className="flex-1 min-w-0 text-center pt-3 active:opacity-60"
               onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.away_team_code}`); }}
             >
               <p className="text-3xl leading-none mb-0.5"><Flag code={match.away_team_code} /></p>
               <p className="text-xs font-bold uppercase tracking-wider text-muted">{match.away_team_code}</p>
-              <p className="text-[11px] text-muted leading-tight truncate">{match.away_team}</p>
+              <p className="text-[11px] text-muted leading-tight line-clamp-2 break-words">{match.away_team}</p>
             </button>
           </div>
 
@@ -339,10 +343,10 @@ export default function MatchCard({
             onClick={hasBet && canBet ? enterEdit : undefined}
           >
             <button
-              className="flex-1 text-right active:opacity-60"
+              className="flex-1 min-w-0 text-center active:opacity-60"
               onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.home_team_code}`); }}
             >
-              <p className="font-bold leading-tight">{match.home_team} <Flag code={match.home_team_code} /></p>
+              <p className="font-bold leading-tight line-clamp-2 break-words">{match.home_team} <Flag code={match.home_team_code} /></p>
               <p className="text-xs text-muted uppercase tracking-wider">{match.home_team_code}</p>
             </button>
 
@@ -357,10 +361,10 @@ export default function MatchCard({
             </div>
 
             <button
-              className="flex-1 text-left active:opacity-60"
+              className="flex-1 min-w-0 text-center active:opacity-60"
               onClick={(e) => { e.stopPropagation(); router.push(`/teams/${match.away_team_code}`); }}
             >
-              <p className="font-bold leading-tight"><Flag code={match.away_team_code} /> {match.away_team}</p>
+              <p className="font-bold leading-tight line-clamp-2 break-words"><Flag code={match.away_team_code} /> {match.away_team}</p>
               <p className="text-xs text-muted uppercase tracking-wider">{match.away_team_code}</p>
             </button>
           </div>

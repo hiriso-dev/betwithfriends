@@ -3,6 +3,7 @@ import { processMatchResult } from "./scoring";
 import { sendMatchResultNotifications } from "./push-service";
 
 const FOOTBALL_DATA_URL = "https://api.football-data.org/v4";
+const SQLITE_MAX_VARIABLES = 500;
 
 type FDMatch = {
   id: number;
@@ -67,14 +68,44 @@ export async function syncScores(env: Env, competitionCode = "WC"): Promise<void
     const data = await res.json<{ matches: FDMatch[] }>();
     if (!data.matches?.length) return;
 
-    // 1. ONE query to fetch all existing matches — avoids N individual SELECTs
-    const apiIds = data.matches.map(m => String(m.id));
-    const placeholders = apiIds.map(() => "?").join(",");
-    const existingRows = await env.DB.prepare(
-      `SELECT id, api_match_id, status, home_score, away_score FROM matches WHERE api_match_id IN (${placeholders})`
-    ).bind(...apiIds).all<{ id: string; api_match_id: string; status: string; home_score: number | null; away_score: number | null }>();
+    // 1. Fetch existing matches in chunks to stay under SQLite bind variable limits.
+    const apiIds = data.matches.map((m) => String(m.id));
+    const existingResults: Array<{
+      id: string;
+      api_match_id: string;
+      status: string;
+      home_score: number | null;
+      away_score: number | null;
+    }> = [];
 
-    const existingMap = new Map(existingRows.results.map(r => [r.api_match_id, r]));
+    let i = 0;
+    let chunkSize = SQLITE_MAX_VARIABLES;
+    while (i < apiIds.length) {
+      const chunk = apiIds.slice(i, i + chunkSize);
+      if (chunk.length === 0) break;
+
+      const placeholders = chunk.map(() => "?").join(",");
+
+      try {
+        const rows = await env.DB.prepare(
+          `SELECT id, api_match_id, status, home_score, away_score FROM matches WHERE api_match_id IN (${placeholders})`
+        )
+          .bind(...chunk)
+          .all<{ id: string; api_match_id: string; status: string; home_score: number | null; away_score: number | null }>();
+
+        existingResults.push(...rows.results);
+        i += chunk.length;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes("too many SQL variables") && chunkSize > 1) {
+          chunkSize = Math.max(1, Math.floor(chunkSize / 2));
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    const existingMap = new Map(existingResults.map((r) => [r.api_match_id, r]));
 
     // 2. Build all UPDATE/INSERT statements in memory, track matches that just finished
     type ExRow = { id: string; api_match_id: string; status: string; home_score: number | null; away_score: number | null };
