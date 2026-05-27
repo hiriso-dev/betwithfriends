@@ -45,9 +45,20 @@ export async function handleNotifications(
 
   // POST /api/push/test
   if (pathname === "/api/push/test" && request.method === "POST") {
-    const sent = await sendTestNotification(env, auth.userId);
-    if (sent === 0) return err("No active push subscription found for this account", 400, origin);
-    return json({ ok: true, sent }, 200, origin);
+    const result = await sendTestNotification(env, auth.userId);
+    if (result.found === 0) {
+      return err("No push subscription found for this account", 400, origin);
+    }
+    if (result.sent === 0) {
+      return err(
+        result.firstError
+          ? `Push subscription found, but delivery failed: ${result.firstError}`
+          : "Push subscription found, but delivery failed.",
+        502,
+        origin
+      );
+    }
+    return json({ ok: true, sent: result.sent, found: result.found }, 200, origin);
   }
 
   // GET /api/push/prefs

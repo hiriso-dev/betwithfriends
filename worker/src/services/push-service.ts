@@ -45,6 +45,13 @@ type GenerateRequestDetailsFn = (
 type PushSendResult = {
   ok: boolean;
   permanentFailure: boolean;
+  errorMessage?: string;
+};
+
+type TestNotificationResult = {
+  found: number;
+  sent: number;
+  firstError?: string;
 };
 
 let webPushRequestDetailsPromise: Promise<GenerateRequestDetailsFn> | null = null;
@@ -129,18 +136,31 @@ async function sendPush(
       await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
         .bind(sub.endpoint)
         .run();
-      return { ok: false, permanentFailure: true };
+      return {
+        ok: false,
+        permanentFailure: true,
+        errorMessage: `Subscription expired (${res.status})`,
+      };
     }
 
     if (!res.ok) {
-      console.error("sendPush failed", res.status, await res.text());
-      return { ok: false, permanentFailure: false };
+      const responseText = await res.text();
+      console.error("sendPush failed", res.status, responseText);
+      return {
+        ok: false,
+        permanentFailure: false,
+        errorMessage: responseText || `Push service rejected the request (${res.status})`,
+      };
     }
 
     return { ok: true, permanentFailure: false };
   } catch (error) {
     console.error("sendPush error", error);
-    return { ok: false, permanentFailure: false };
+    return {
+      ok: false,
+      permanentFailure: false,
+      errorMessage: error instanceof Error ? error.message : "Unknown push delivery error",
+    };
   }
 }
 
@@ -251,7 +271,7 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
   }
 }
 
-export async function sendTestNotification(env: Env, userId: string): Promise<number> {
+export async function sendTestNotification(env: Env, userId: string): Promise<TestNotificationResult> {
   const rows = await env.DB.prepare(`
     SELECT subscription_json
     FROM push_subscriptions
@@ -259,6 +279,7 @@ export async function sendTestNotification(env: Env, userId: string): Promise<nu
   `).bind(userId).all<{ subscription_json: string }>();
 
   let sent = 0;
+  let firstError: string | undefined;
 
   for (const row of rows.results) {
     const sub = JSON.parse(row.subscription_json) as PushSubscription;
@@ -277,8 +298,14 @@ export async function sendTestNotification(env: Env, userId: string): Promise<nu
 
     if (result.ok) {
       sent += 1;
+    } else if (!firstError) {
+      firstError = result.errorMessage;
     }
   }
 
-  return sent;
+  return {
+    found: rows.results.length,
+    sent,
+    firstError,
+  };
 }
