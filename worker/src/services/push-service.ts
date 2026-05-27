@@ -15,7 +15,7 @@ type PushSubscription = {
 };
 
 type PushSendOptions = {
-  topic: string;
+  topic?: string;
   urgency?: "very-low" | "low" | "normal" | "high";
   ttl?: number;
 };
@@ -25,6 +25,12 @@ type GeneratedPushRequest = {
   method: string;
   headers: Record<string, string | number>;
   body?: ArrayBuffer | ArrayBufferView | null;
+};
+
+type VapidDetails = {
+  subject: string;
+  publicKey: string;
+  privateKey: string;
 };
 
 type GenerateRequestDetailsFn = (
@@ -76,6 +82,50 @@ function getGenerateRequestDetails(): Promise<GenerateRequestDetailsFn> {
   return webPushRequestDetailsPromise;
 }
 
+function getVapidDetails(env: Env): VapidDetails {
+  const subject = env.VAPID_SUBJECT?.trim();
+  const publicKey = env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = env.VAPID_PRIVATE_KEY?.trim();
+
+  if (!subject) {
+    throw new Error("Missing worker secret VAPID_SUBJECT");
+  }
+
+  if (!subject.startsWith("mailto:") && !/^https?:\/\//.test(subject)) {
+    throw new Error("Invalid VAPID_SUBJECT: expected a mailto: or http(s) URL");
+  }
+
+  if (!publicKey) {
+    throw new Error("Missing worker secret VAPID_PUBLIC_KEY");
+  }
+
+  if (!privateKey) {
+    throw new Error("Missing worker secret VAPID_PRIVATE_KEY");
+  }
+
+  return { subject, publicKey, privateKey };
+}
+
+function isAppleWebPushEndpoint(endpoint: string): boolean {
+  try {
+    return new URL(endpoint).hostname === "web.push.apple.com";
+  } catch {
+    return false;
+  }
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function buildTopicHeader(endpoint: string, rawTopic?: string): Promise<string | undefined> {
+  if (!rawTopic) return undefined;
+  if (isAppleWebPushEndpoint(endpoint)) return undefined;
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawTopic));
+  return toHex(new Uint8Array(digest)).slice(0, 32);
+}
+
 async function reserveDelivery(
   env: Env,
   userId: string,
@@ -110,15 +160,13 @@ async function sendPush(
 ): Promise<PushSendResult> {
   try {
     const generateRequestDetails = await getGenerateRequestDetails();
+    const vapidDetails = getVapidDetails(env);
+    const topic = await buildTopicHeader(sub.endpoint, options.topic);
     const requestDetails = generateRequestDetails(sub, JSON.stringify(payload), {
       TTL: options.ttl ?? 3600,
-      topic: options.topic,
+      topic,
       urgency: options.urgency ?? "normal",
-      vapidDetails: {
-        subject: env.VAPID_SUBJECT,
-        publicKey: env.VAPID_PUBLIC_KEY,
-        privateKey: env.VAPID_PRIVATE_KEY,
-      },
+      vapidDetails,
     });
 
     const headers = new Headers();
