@@ -510,7 +510,7 @@ function BetSheet({
           disabled={saving || locked}
           className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50"
         >
-          {saving ? "Saving…" : locked ? "Locked" : "Save prediction"}
+          {saving ? "Saving…" : locked ? "Locked" : "Save bet"}
         </button>
       </div>
     </>
@@ -521,9 +521,26 @@ function ScoreInput({ label, value, onChange, disabled }: { label: string; value
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="text-xs text-muted max-w-[80px] truncate text-center">{label}</p>
-      <button onClick={() => onChange(Math.min(20, value + 1))} disabled={disabled} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30 transition active:scale-90">+</button>
-      <span className="text-4xl font-bold w-12 text-center">{value}</span>
-      <button onClick={() => onChange(Math.max(0, value - 1))} disabled={disabled} className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-lg disabled:opacity-30 transition active:scale-90">−</button>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(20, value + 1))}
+        disabled={disabled}
+        className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-accent/50 bg-surface-hover text-4xl font-black tabular-nums transition active:scale-95 active:border-accent active:bg-accent/10 disabled:opacity-40 select-none"
+      >
+        {value}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        disabled={disabled || value === 0}
+        className={`flex h-7 w-16 items-center justify-center rounded-lg border font-bold text-base transition active:scale-95 ${
+          value > 0 && !disabled
+            ? "border-border bg-surface-hover text-foreground active:border-accent active:text-accent"
+            : "border-transparent opacity-0 pointer-events-none"
+        }`}
+      >
+        −
+      </button>
     </div>
   );
 }
