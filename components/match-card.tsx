@@ -313,15 +313,18 @@ export default function MatchCard({
             <button
               onClick={saveQuick}
               disabled={saving}
-              className="flex-1 rounded-xl bg-accent py-2 font-bold text-[#0f0f23] text-sm transition active:scale-95 disabled:opacity-50"
+              className="flex-1 rounded-xl bg-accent px-4 py-2.5 font-bold text-[#0f0f23] text-sm transition active:scale-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : (
-                <>
-                  <span className="block">Save bet</span>
+                <span className="flex flex-col items-center gap-1">
+                  <span className="block text-[15px] leading-none">Save bet</span>
                   {secondsLeft > 0 && (
-                    <span className="block text-[10px] font-normal opacity-60">⏱ {fmtCountdown(secondsLeft)}</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#0f0f23]/12 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#0f0f23]">
+                      <span aria-hidden="true">⏱</span>
+                      <span>Locks in {fmtCountdown(secondsLeft)}</span>
+                    </span>
                   )}
-                </>
+                </span>
               )}
             </button>
             {hasBet && (
