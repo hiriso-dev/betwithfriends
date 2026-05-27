@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { useInstallable } from "@/components/install-prompt";
 
 const nav = [
   { href: "/home",     icon: "🏠", label: "Home" },
@@ -13,6 +14,8 @@ const nav = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { mode: installMode, isStandalone } = useInstallable();
+  const showInstallBadge = !isStandalone && installMode !== null;
 
   return (
     <div className="flex h-full flex-col">
@@ -38,8 +41,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className="flex flex-1 flex-col items-center gap-0.5 py-2 transition active:scale-90"
               >
-                <span className={`text-2xl transition ${active ? "scale-110" : "opacity-60"}`}>
+                <span className={`relative text-2xl transition ${active ? "scale-110" : "opacity-60"}`}>
                   {item.icon}
+                  {item.href === "/profile" && showInstallBadge && (
+                    <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-black text-[#0f0f23] ring-2 ring-surface">
+                      1
+                    </span>
+                  )}
                 </span>
                 <span className={`text-[10px] font-medium tracking-wide ${active ? "text-accent" : "text-muted"}`}>
                   {item.label}

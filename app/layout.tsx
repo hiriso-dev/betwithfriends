@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
-import { InstallPrompt } from "@/components/install-prompt";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
@@ -34,7 +33,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="h-full bg-background text-foreground antialiased">
         <ServiceWorkerRegistrar />
-        <InstallPrompt />
         {children}
       </body>
     </html>

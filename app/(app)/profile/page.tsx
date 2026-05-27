@@ -215,6 +215,70 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {!isStandalone && installMode && (
+        <div className="mb-4 rounded-2xl border border-accent/40 bg-accent/10 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xl text-accent">
+              📲
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Recommended</p>
+              <h2 className="mt-1 text-lg font-black">Install the app</h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Install BetWithFriends so users can open it faster and get notification support more reliably.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-border bg-surface/70 p-4">
+            {installMode === "prompt" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  Install it now from the browser prompt, then open it from your home screen for the app-like experience.
+                </p>
+                <button
+                  onClick={triggerInstall}
+                  className="w-full rounded-xl bg-accent py-3 font-semibold text-[#0f0f23] transition active:scale-95"
+                >
+                  Install app
+                </button>
+              </div>
+            )}
+
+            {installMode === "ios-safari" && (
+              <div className="space-y-2 text-sm text-muted">
+                <p>1. Tap <strong className="text-foreground">Share ⬆</strong> at the bottom of Safari</p>
+                <p>2. Tap <strong className="text-foreground">Add to Home Screen</strong></p>
+                <p>3. Tap <strong className="text-foreground">Add</strong></p>
+              </div>
+            )}
+
+            {installMode === "ios-other" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted">
+                  iPhone installation has to start in Safari before notifications can work.
+                </p>
+                <a
+                  href={typeof window !== "undefined"
+                    ? window.location.href.replace(/^https:\/\//, "x-safari-https://").replace(/^http:\/\//, "x-safari-http://")
+                    : "#"}
+                  className="block w-full rounded-xl bg-accent py-3 text-center font-semibold text-[#0f0f23] transition active:scale-95"
+                >
+                  Open in Safari
+                </a>
+              </div>
+            )}
+
+            {installMode === "android-other" && (
+              <div className="space-y-2 text-sm text-muted">
+                <p>1. Open your browser menu using <strong className="text-foreground">⋮</strong></p>
+                <p>2. Tap <strong className="text-foreground">Add to Home Screen</strong> or <strong className="text-foreground">Install app</strong></p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden cursor-pointer active:bg-surface-hover transition"
         onClick={() => router.push("/groups")}
@@ -300,59 +364,7 @@ export default function ProfilePage() {
             <p className="text-xs text-muted">{pushSupported ? "Running as installed app" : "Running in standalone mode"}</p>
           </div>
         </div>
-      ) : (
-        <div className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="font-semibold">Install App</h2>
-            <p className="text-xs text-muted mt-0.5">Add BetWithFriends to your home screen</p>
-          </div>
-          <div className="p-4">
-            {installMode === "prompt" && (
-              <button
-                onClick={triggerInstall}
-                className="w-full rounded-xl bg-accent py-3 font-semibold text-[#0f0f23] transition active:scale-95"
-              >
-                📲 Install app
-              </button>
-            )}
-            {installMode === "ios-safari" && (
-              <div className="text-sm text-muted space-y-2">
-                <p>1. Tap <strong className="text-foreground">Share ⬆</strong> at the bottom of Safari</p>
-                <p>2. Scroll down and tap <strong className="text-foreground">&quot;Add to Home Screen&quot;</strong></p>
-                <p>3. Tap <strong className="text-foreground">Add</strong></p>
-              </div>
-            )}
-            {installMode === "ios-other" && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted">
-                  Safari is required to install on iPhone. Open this page in Safari first.
-                </p>
-                <a
-                  href={typeof window !== "undefined"
-                    ? window.location.href.replace(/^https:\/\//, "x-safari-https://").replace(/^http:\/\//, "x-safari-http://")
-                    : "#"}
-                  className="block w-full rounded-xl bg-accent py-3 text-center font-semibold text-[#0f0f23] transition active:scale-95"
-                >
-                  Open in Safari →
-                </a>
-                <p className="text-center text-xs text-muted">Then tap Share ⬆ → &quot;Add to Home Screen&quot;</p>
-              </div>
-            )}
-            {installMode === "android-other" && (
-              <div className="text-sm text-muted space-y-2">
-                <p>Tap <strong className="text-foreground">⋮ Menu</strong> in your browser</p>
-                <p>Then tap <strong className="text-foreground">&quot;Add to Home Screen&quot;</strong> or{" "}
-                  <strong className="text-foreground">&quot;Install app&quot;</strong></p>
-              </div>
-            )}
-            {!installMode && (
-              <p className="text-sm text-muted text-center">
-                Use Chrome or Safari to install this app.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <button
         onClick={logout}
