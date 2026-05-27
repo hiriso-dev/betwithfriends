@@ -407,8 +407,8 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
     const result = await sendPush(env, sub, {
       title: "⚽ Match result",
       body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: "/favicon-512.png",
+      badge: "/favicon-512.png",
       tag: `result-${match.id}`,
       url: "/fixtures",
     }, {
@@ -454,7 +454,7 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
       const result = await sendPush(env, sub, {
         title: "⏰ Game in 1 hour!",
         body: `${match.home_team} vs ${match.away_team} — place your prediction now`,
-        icon: "/icons/icon-192.png",
+        icon: "/favicon-512.png",
         tag: `reminder-${match.id}`,
         url: "/fixtures",
       }, {
@@ -511,8 +511,8 @@ export async function sendReminderNotificationToUser(
   return sendNotificationToUser(env, userId, {
     title: "⏰ Game in 1 hour!",
     body: `${match.home_team} vs ${match.away_team} — place your prediction now`,
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    icon: "/favicon-512.png",
+    badge: "/favicon-512.png",
     tag: `reminder-${match.id}`,
     url: "/fixtures",
   }, {
@@ -541,8 +541,8 @@ export async function sendResultNotificationToUser(
   return sendNotificationToUser(env, userId, {
     title: "⚽ Match result",
     body,
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    icon: "/favicon-512.png",
+    badge: "/favicon-512.png",
     tag: `result-${match.id}`,
     url: "/fixtures",
   }, {
@@ -556,8 +556,8 @@ export async function sendTestNotification(env: Env, userId: string): Promise<Us
   return sendNotificationToUser(env, userId, {
     title: "Test notification",
     body: "BetWithFriends notifications are working on this device.",
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
+    icon: "/favicon-512.png",
+    badge: "/favicon-512.png",
     tag: `test-${userId}`,
     url: "/profile",
   }, {
