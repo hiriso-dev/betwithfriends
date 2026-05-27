@@ -26,6 +26,32 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return arr.buffer as ArrayBuffer;
 }
 
+async function ensureOk(res: Response): Promise<void> {
+  if (res.ok) return;
+
+  const text = await res.text().catch(() => "");
+  let message = text;
+  try {
+    message = JSON.parse(text).error ?? text;
+  } catch {}
+
+  throw new Error(message || `HTTP ${res.status}`);
+}
+
+async function registerSubscription(sub: PushSubscription): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api/push/subscribe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(sub.toJSON()),
+  });
+
+  await ensureOk(res);
+}
+
 export async function getPushSubscription(): Promise<PushSubscription | null> {
   const reg = await navigator.serviceWorker.getRegistration();
   if (!reg) return null;
@@ -40,15 +66,7 @@ export async function subscribePush(): Promise<void> {
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
   });
 
-  const token = getToken();
-  await fetch(`${API_BASE}/api/push/subscribe`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(sub.toJSON()),
-  });
+  await registerSubscription(sub);
 }
 
 export async function unsubscribePush(): Promise<void> {
@@ -59,7 +77,7 @@ export async function unsubscribePush(): Promise<void> {
   await sub.unsubscribe();
 
   const token = getToken();
-  await fetch(`${API_BASE}/api/push/unsubscribe`, {
+  const res = await fetch(`${API_BASE}/api/push/unsubscribe`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -67,4 +85,6 @@ export async function unsubscribePush(): Promise<void> {
     },
     body: JSON.stringify({ endpoint: sub.endpoint }),
   });
+
+  await ensureOk(res);
 }

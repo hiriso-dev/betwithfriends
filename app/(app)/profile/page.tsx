@@ -102,17 +102,26 @@ export default function ProfilePage() {
           return;
         }
 
-        const { getPushSubscription } = await import("@/lib/push");
+        const { getPushSubscription, subscribePush } = await import("@/lib/push");
         const subscription = await getPushSubscription();
+
+        if (Notification.permission === "granted" && subscription !== null) {
+          await subscribePush();
+        }
+
         if (!cancelled) {
           setPushBlockedReason(null);
           setPushEnabled(Notification.permission === "granted" && subscription !== null);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setPushSupported(false);
           setPushEnabled(false);
-          setPushBlockedReason("Service worker registration is not available yet. Reload the app and try again.");
+          setPushBlockedReason(
+            error instanceof Error
+              ? error.message
+              : "Service worker registration is not available yet. Reload the app and try again."
+          );
         }
       }
     })();
@@ -129,9 +138,13 @@ export default function ProfilePage() {
     try {
       const { subscribePush } = await import("@/lib/push");
       await subscribePush();
+      setPushBlockedReason(null);
       setPushEnabled(true);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      setPushEnabled(false);
+      setPushBlockedReason(
+        error instanceof Error ? error.message : "Unable to enable notifications."
+      );
     }
   }
 
@@ -202,7 +215,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Groups link */}
       <div
         className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden cursor-pointer active:bg-surface-hover transition"
         onClick={() => router.push("/groups")}
@@ -219,7 +231,6 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Notifications */}
       <div className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
           <h2 className="font-semibold">Notifications</h2>
@@ -242,6 +253,9 @@ export default function ProfilePage() {
             >
               Enable notifications
             </button>
+            {pushBlockedReason && (
+              <p className="mt-3 text-sm text-muted">{pushBlockedReason}</p>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -278,7 +292,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Install app */}
       {isStandalone ? (
         <div className="mb-4 rounded-2xl bg-surface border border-border px-4 py-3 flex items-center gap-3">
           <span className="text-success text-xl">✓</span>
@@ -341,7 +354,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Sign out */}
       <button
         onClick={logout}
         className="w-full rounded-xl border border-danger/30 py-3.5 text-danger font-medium transition active:bg-danger/10"
