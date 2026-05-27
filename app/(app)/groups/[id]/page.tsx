@@ -57,7 +57,7 @@ export default function GroupDetailPage() {
   if (!group) return null;
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4">
+    <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4">
       <button
         onClick={() => router.back()}
         className="mb-4 flex items-center gap-2 text-sm text-muted transition active:text-accent"

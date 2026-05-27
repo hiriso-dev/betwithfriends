@@ -198,7 +198,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4 pb-8">
+    <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4 pb-8">
       <h1 className="mb-6 text-xl font-bold">Profile</h1>
 
       {profile && (

@@ -37,7 +37,7 @@ export default function HomePage() {
   const [betTarget, setBetTarget] = useState<Match | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(Date.now());
+  const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(t);
@@ -69,7 +69,7 @@ export default function HomePage() {
     apiFetch<SpecialBet[]>(`/api/special-bets?group_id=${selectedGroup}`).then(setSpecialBets).catch(() => {});
   }, [selectedGroup, loading]);
 
-  const now = Date.now() / 1000;
+  const now = tick / 1000;
   const upcoming = matches
     .filter(m => m.status === "scheduled" && m.match_date > now)
     .sort((a, b) => a.match_date - b.match_date);
@@ -146,15 +146,18 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold">World Cup 2026</h1>
+    <div className="mx-auto max-w-lg lg:max-w-7xl px-4 pt-4 pb-4 lg:px-8 lg:pt-6">
+      <div className="mb-4 lg:mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl lg:text-3xl font-bold">World Cup 2026</h1>
+          <p className="hidden lg:block text-sm text-muted mt-1">Dashboard · {tournamentStarted ? "Tournament live" : `${daysLeft} days until kick-off`}</p>
+        </div>
         <span className="rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent">🇺🇸🇨🇦🇲🇽</span>
       </div>
 
       {/* Group selector (if multiple groups) */}
       {groups.length > 1 && (
-        <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="mb-4 lg:mb-6 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {groups.map(g => (
             <button
               key={g.id}
@@ -169,165 +172,180 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Countdown to next bet close */}
-      {groups.length > 0 && nextDeadlineMs < Infinity && msUntilClose > 0 && (
-        <button
-          onClick={() => isSpecialDeadline ? router.push("/special") : featured && setBetTarget(featured)}
-          className="mb-4 w-full rounded-2xl border border-accent/40 bg-surface px-4 py-3 text-left transition active:bg-surface-hover"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-0.5">
-                {isSpecialDeadline ? "⭐ Special bets close in" : "🔒 Next bet locks in"}
-              </p>
-              <p className="font-black text-xl tabular-nums">{fmtCountdown(msUntilClose)}</p>
-            </div>
-            <div className="text-right">
-              {isSpecialDeadline ? (
-                <p className="text-sm font-semibold text-accent">Place specials →</p>
-              ) : featured ? (
-                <>
-                  <p className="text-sm font-semibold">{featured.home_team} vs {featured.away_team}</p>
-                  <p className="text-xs text-muted">{featured.group_name ? `Group ${featured.group_name}` : featured.stage} · Bet now →</p>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </button>
-      )}
-
-      {/* Special bets compact CTA */}
-      {groups.length > 0 && !tournamentStarted && unplacedSpecials.length > 0 && (
-        <button
-          onClick={() => router.push("/special")}
-          className="mb-4 w-full rounded-2xl border border-border bg-surface px-4 py-3 text-left transition active:bg-surface-hover"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-sm">⭐ Special Bets</p>
-              <p className="text-xs text-muted mt-0.5">
-                {unplacedSpecials.length} of {SPECIAL_BET_TYPES.length} not placed · locks June 11
-              </p>
-            </div>
-            <span className="text-accent font-semibold text-sm">Place →</span>
-          </div>
-        </button>
-      )}
-      {groups.length > 0 && !tournamentStarted && unplacedSpecials.length === 0 && (
-        <div className="mb-4 rounded-2xl border border-border bg-surface px-4 py-3">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-sm">⭐ Special Bets</p>
-            <span className="text-success text-sm font-semibold">✓ All placed</span>
-          </div>
-        </div>
-      )}
-
-      {/* Next bet CTA */}
-      {featured ? (
-        <div className="mb-6 rounded-2xl border border-border bg-surface p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted">
-            {nextUnbet ? "⚡ Next bet to place" : "🗓 Next match"}
-          </p>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="flex-1 text-right">
-              <p className="font-bold">{featured.home_team} <Flag code={featured.home_team_code} /></p>
-              <p className="text-xs text-muted uppercase">{featured.home_team_code}</p>
-            </div>
-            <span className="mx-2 text-sm font-bold text-muted">vs</span>
-            <div className="flex-1 text-left">
-              <p className="font-bold"><Flag code={featured.away_team_code} /> {featured.away_team}</p>
-              <p className="text-xs text-muted uppercase">{featured.away_team_code}</p>
-            </div>
-          </div>
-          <p className="mb-1 text-center text-xs text-muted">
-            {new Date(featured.match_date * 1000).toLocaleString("en-US", {
-              weekday: "short", month: "short", day: "numeric",
-              hour: "2-digit", minute: "2-digit", timeZoneName: "short",
-            })}
-          </p>
-          {featured.group_name && (
-            <p className="mb-3 text-center text-[10px] text-muted">Group {featured.group_name}{featured.stadium ? ` · ${featured.stadium}` : ""}</p>
+      {/* Dashboard grid: stacks on mobile, 3-column on desktop */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+        {/* LEFT / MAIN COLUMN — primary actions */}
+        <div className="lg:col-span-2 space-y-4 lg:space-y-6">
+          {/* Countdown to next bet close */}
+          {groups.length > 0 && nextDeadlineMs < Infinity && msUntilClose > 0 && (
+            <button
+              onClick={() => isSpecialDeadline ? router.push("/special") : featured && setBetTarget(featured)}
+              className="w-full rounded-2xl border border-accent/40 bg-surface px-4 py-3 lg:px-6 lg:py-5 text-left transition active:bg-surface-hover hover:border-accent/60"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-0.5">
+                    {isSpecialDeadline ? "⭐ Special bets close in" : "🔒 Next bet locks in"}
+                  </p>
+                  <p className="font-black text-xl lg:text-3xl tabular-nums">{fmtCountdown(msUntilClose)}</p>
+                </div>
+                <div className="text-right">
+                  {isSpecialDeadline ? (
+                    <p className="text-sm font-semibold text-accent">Place specials →</p>
+                  ) : featured ? (
+                    <>
+                      <p className="text-sm lg:text-base font-semibold">{featured.home_team} vs {featured.away_team}</p>
+                      <p className="text-xs text-muted">{featured.group_name ? `Group ${featured.group_name}` : featured.stage} · Bet now →</p>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </button>
           )}
 
-          {nextUnbet && featured.my_bet === undefined ? (
-            <button
-              onClick={() => setBetTarget(featured)}
-              className="w-full rounded-xl bg-accent py-3 font-bold text-[#0f0f23] transition active:scale-95"
-            >
-              Place bet →
-            </button>
-          ) : featured.my_bet ? (
-            <div className="text-center text-sm text-muted">
-              ✓ Bet placed: <span className="font-semibold text-foreground">
-                {featured.my_bet.home_score_pred} – {featured.my_bet.away_score_pred}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mb-6 rounded-2xl border border-border bg-surface p-8 text-center text-muted text-sm">
-          No upcoming matches
-        </div>
-      )}
-
-      {/* My Groups */}
-      {groups.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-border bg-surface overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="font-semibold text-sm">My Groups</h2>
-          </div>
-          {groups.map(g => (
-            <div
-              key={g.id}
-              className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0 cursor-pointer active:bg-surface-hover"
-              onClick={() => router.push(`/groups/${g.id}`)}
-            >
-              <div>
-                <p className="font-semibold text-sm">{g.name}</p>
-                <p className="text-xs text-muted">{g.member_count} members</p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-accent">{g.my_points.toFixed(1)}pts</p>
-                <p className="text-xs text-muted">Rank #{g.my_rank}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Recent results */}
-      {recentFinished.length > 0 && (
-        <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="font-semibold text-sm">Recent Results</h2>
-          </div>
-          {recentFinished.map(m => {
-            const bet = m.my_bet;
-            const betResult = bet
-              ? bet.home_score_pred === m.home_score && bet.away_score_pred === m.away_score ? "exact"
-              : (bet.home_score_pred > bet.away_score_pred) === (m.home_score! > m.away_score!) || (bet.home_score_pred === bet.away_score_pred) === (m.home_score === m.away_score) ? "result"
-              : "wrong"
-              : null;
-            const color = betResult === "exact" ? "text-success" : betResult === "result" ? "text-warning" : betResult === "wrong" ? "text-danger" : "text-muted";
-            return (
-              <div key={m.id} className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {m.home_score} – {m.away_score} <Flag code={m.away_team_code} /> {m.away_team}</p>
-                  <p className="text-[10px] text-muted">Group {m.group_name}</p>
+          {/* Next bet CTA */}
+          {featured ? (
+            <div className="rounded-2xl border border-border bg-surface p-4 lg:p-6">
+              <p className="mb-2 lg:mb-4 text-xs font-semibold uppercase tracking-widest text-muted">
+                {nextUnbet ? "⚡ Next bet to place" : "🗓 Next match"}
+              </p>
+              <div className="mb-3 lg:mb-5 flex items-center justify-between gap-2 lg:gap-6">
+                <div className="flex-1 text-right">
+                  <p className="font-bold lg:text-xl">{featured.home_team} <Flag code={featured.home_team_code} /></p>
+                  <p className="text-xs text-muted uppercase">{featured.home_team_code}</p>
                 </div>
-                {bet && (
-                  <div className="text-right ml-2">
-                    <p className={`text-sm font-bold ${color}`}>
-                      {bet.points_earned !== null && bet.points_earned > 0 ? `+${bet.points_earned.toFixed(1)}pts` : "0pts"}
-                    </p>
-                    <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
-                  </div>
-                )}
+                <span className="mx-2 text-sm lg:text-base font-bold text-muted">vs</span>
+                <div className="flex-1 text-left">
+                  <p className="font-bold lg:text-xl"><Flag code={featured.away_team_code} /> {featured.away_team}</p>
+                  <p className="text-xs text-muted uppercase">{featured.away_team_code}</p>
+                </div>
               </div>
-            );
-          })}
+              <p className="mb-1 text-center text-xs text-muted">
+                {new Date(featured.match_date * 1000).toLocaleString("en-US", {
+                  weekday: "short", month: "short", day: "numeric",
+                  hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+                })}
+              </p>
+              {featured.group_name && (
+                <p className="mb-3 lg:mb-5 text-center text-[10px] lg:text-xs text-muted">Group {featured.group_name}{featured.stadium ? ` · ${featured.stadium}` : ""}</p>
+              )}
+
+              {nextUnbet && featured.my_bet === undefined ? (
+                <button
+                  onClick={() => setBetTarget(featured)}
+                  className="w-full rounded-xl bg-accent py-3 font-bold text-[#0f0f23] transition active:scale-95 hover:bg-accent/90"
+                >
+                  Place bet →
+                </button>
+              ) : featured.my_bet ? (
+                <div className="text-center text-sm text-muted">
+                  ✓ Bet placed: <span className="font-semibold text-foreground">
+                    {featured.my_bet.home_score_pred} – {featured.my_bet.away_score_pred}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-surface p-8 text-center text-muted text-sm">
+              No upcoming matches
+            </div>
+          )}
+
+          {/* Recent results — shown in main column on desktop */}
+          {recentFinished.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+              <div className="px-4 py-3 lg:px-6 lg:py-4 border-b border-border flex items-center justify-between">
+                <h2 className="font-semibold text-sm lg:text-base">Recent Results</h2>
+                <button
+                  onClick={() => router.push("/fixtures")}
+                  className="hidden lg:block text-xs text-accent hover:underline"
+                >
+                  See all →
+                </button>
+              </div>
+              {recentFinished.map(m => {
+                const bet = m.my_bet;
+                const betResult = bet
+                  ? bet.home_score_pred === m.home_score && bet.away_score_pred === m.away_score ? "exact"
+                  : (bet.home_score_pred > bet.away_score_pred) === (m.home_score! > m.away_score!) || (bet.home_score_pred === bet.away_score_pred) === (m.home_score === m.away_score) ? "result"
+                  : "wrong"
+                  : null;
+                const color = betResult === "exact" ? "text-success" : betResult === "result" ? "text-warning" : betResult === "wrong" ? "text-danger" : "text-muted";
+                return (
+                  <div key={m.id} className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {m.home_score} – {m.away_score} <Flag code={m.away_team_code} /> {m.away_team}</p>
+                      <p className="text-[10px] text-muted">Group {m.group_name}</p>
+                    </div>
+                    {bet && (
+                      <div className="text-right ml-2">
+                        <p className={`text-sm font-bold ${color}`}>
+                          {bet.points_earned !== null && bet.points_earned > 0 ? `+${bet.points_earned.toFixed(1)}pts` : "0pts"}
+                        </p>
+                        <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* RIGHT / SIDE COLUMN — secondary info */}
+        <div className="space-y-4 lg:space-y-6 mt-4 lg:mt-0">
+          {/* Special bets compact CTA */}
+          {groups.length > 0 && !tournamentStarted && unplacedSpecials.length > 0 && (
+            <button
+              onClick={() => router.push("/special")}
+              className="w-full rounded-2xl border border-border bg-surface px-4 py-3 lg:px-5 lg:py-4 text-left transition active:bg-surface-hover hover:border-accent/40"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-sm">⭐ Special Bets</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    {unplacedSpecials.length} of {SPECIAL_BET_TYPES.length} not placed · locks June 11
+                  </p>
+                </div>
+                <span className="text-accent font-semibold text-sm">Place →</span>
+              </div>
+            </button>
+          )}
+          {groups.length > 0 && !tournamentStarted && unplacedSpecials.length === 0 && (
+            <div className="rounded-2xl border border-border bg-surface px-4 py-3 lg:px-5 lg:py-4">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-sm">⭐ Special Bets</p>
+                <span className="text-success text-sm font-semibold">✓ All placed</span>
+              </div>
+            </div>
+          )}
+
+          {/* My Groups */}
+          {groups.length > 0 && (
+            <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+              <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-border">
+                <h2 className="font-semibold text-sm">My Groups</h2>
+              </div>
+              {groups.map(g => (
+                <div
+                  key={g.id}
+                  className="flex items-center justify-between px-4 py-3 lg:px-5 lg:py-4 border-b border-border last:border-0 cursor-pointer active:bg-surface-hover hover:bg-surface-hover transition"
+                  onClick={() => router.push(`/groups/${g.id}`)}
+                >
+                  <div>
+                    <p className="font-semibold text-sm">{g.name}</p>
+                    <p className="text-xs text-muted">{g.member_count} members</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-accent">{g.my_points.toFixed(1)}pts</p>
+                    <p className="text-xs text-muted">Rank #{g.my_rank}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Match bet sheet */}
       {betTarget && (() => {
@@ -366,7 +384,13 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
   const [doubleUp, setDoubleUp] = useState(match.my_bet?.double_up === 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
+  const [minutesLeft, setMinutesLeft] = useState(() => Math.floor((match.match_date * 1000 - Date.now()) / 60000));
+  useEffect(() => {
+    const t = setInterval(() => {
+      setMinutesLeft(Math.floor((match.match_date * 1000 - Date.now()) / 60000));
+    }, 10000);
+    return () => clearInterval(t);
+  }, [match.match_date]);
   const locked = minutesLeft <= 5 || match.status !== "scheduled";
 
   const alreadyDoubleUp = match.my_bet?.double_up === 1;
@@ -394,8 +418,10 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
   return (
     <>
       <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
+      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto
+                      lg:inset-auto lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:-translate-y-1/2
+                      lg:w-[28rem] lg:max-w-[90vw] lg:rounded-3xl lg:border lg:border-border">
+        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto lg:hidden" />
         <div className="mb-4 mt-3 text-center">
           <h3 className="text-lg font-bold"><Flag code={match.home_team_code} /> {match.home_team} vs {match.away_team} <Flag code={match.away_team_code} /></h3>
           <p className="mt-1 text-xs text-muted">

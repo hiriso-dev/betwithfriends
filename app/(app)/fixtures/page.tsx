@@ -53,6 +53,7 @@ export default function FixturesPage() {
   const { open: helpOpen, close: closeHelp, openHelp } = useHelpDialog();
   const [allMatches, setAllMatches] = useState<Match[]>([]);
   const [view, setView] = useState<"coming" | "past" | "groups">("coming");
+  const [onlyUnbet, setOnlyUnbet] = useState(false);
   const [selectedWcGroup, setSelectedWcGroup] = useState("A");
   const [bettingGroupId, setBettingGroupId] = useState<string>("none");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -117,7 +118,10 @@ export default function FixturesPage() {
 
   const comingMatches = [...allMatches]
     .filter(m => m.status !== "finished")
+    .filter(m => !onlyUnbet || !m.my_bet)
     .sort((a, b) => a.match_date - b.match_date);
+
+  const unbetCount = allMatches.filter(m => m.status === "scheduled" && !m.my_bet).length;
 
   const pastMatches = [...allMatches]
     .filter(m => m.status === "finished")
@@ -141,83 +145,107 @@ export default function FixturesPage() {
   const groupBettingId = bettingGroupId !== "none" ? bettingGroupId : undefined;
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
+    <div className="mx-auto max-w-lg lg:max-w-none px-4 pt-4 pb-4 lg:px-8 lg:pt-6">
       {/* Admin test match panel */}
       {userEmail === ADMIN_EMAIL && (
         <AdminTestMatch onMatchChange={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
       )}
 
-      {/* Betting group selector — top row */}
-      {groups.length > 1 && (
-        <div className="mb-2 flex rounded-xl bg-surface border border-border p-0.5 gap-0.5">
-          {groups.map(g => (
-            <button key={g.id} onClick={() => setBettingGroupId(g.id)}
-              className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition truncate ${bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
-            >
-              {g.name}
-            </button>
-          ))}
+      {/* Top toolbar — stacks on mobile, single row on desktop */}
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+        {groups.length > 1 && (
+          <div className="flex rounded-xl bg-surface border border-border p-0.5 gap-0.5 lg:max-w-sm lg:flex-1">
+            {groups.map(g => (
+              <button key={g.id} onClick={() => setBettingGroupId(g.id)}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition truncate ${bettingGroupId === g.id ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+              >
+                {g.name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 lg:flex-1 lg:max-w-md">
+          <div className="flex flex-1 rounded-xl bg-surface border border-border p-0.5">
+            {(["coming", "past", "groups"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${view === v ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
+              >
+                {v === "coming" ? "Coming" : v === "past" ? "Past" : "Groups"}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={openHelp}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm font-bold text-muted shrink-0 transition active:border-accent active:text-accent"
+            title="How to play"
+          >
+            ?
+          </button>
         </div>
-      )}
-
-      {/* View toggle + help — second row */}
-      <div className="mb-4 flex items-center gap-2">
-        <div className="flex flex-1 rounded-xl bg-surface border border-border p-0.5">
-          {(["coming", "past", "groups"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${view === v ? "bg-accent text-[#0f0f23]" : "text-muted"}`}
-            >
-              {v === "coming" ? "Coming" : v === "past" ? "Past" : "Groups"}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={openHelp}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-sm font-bold text-muted shrink-0 transition active:border-accent active:text-accent"
-          title="How to play"
-        >
-          ?
-        </button>
       </div>
 
       {/* COMING VIEW */}
       {view === "coming" && (
-        <div className="space-y-6">
+        <div className="space-y-6 lg:space-y-8">
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setOnlyUnbet(false)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${!onlyUnbet ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setOnlyUnbet(true)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${onlyUnbet ? "bg-accent text-[#0f0f23]" : "bg-surface border border-border text-muted"}`}
+            >
+              To bet {unbetCount > 0 && <span className={`ml-1 ${onlyUnbet ? "opacity-70" : "text-accent"}`}>{unbetCount}</span>}
+            </button>
+          </div>
           {comingByDay.length === 0 && (
-            <p className="py-12 text-center text-sm text-muted">No upcoming matches</p>
+            <p className="py-12 text-center text-sm text-muted">
+              {onlyUnbet ? "All caught up — you've bet on every upcoming match 🎯" : "No upcoming matches"}
+            </p>
           )}
           {comingByDay.map(([day, dayMatches]) => (
-            <div key={day}>
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted">{day}</p>
-              <div className="space-y-3">
+            <section key={day}>
+              <div className="mb-2 px-1 lg:mb-4 lg:flex lg:items-center lg:gap-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted lg:text-sm">{day}</p>
+                <div className="hidden lg:block flex-1 h-px bg-border" />
+                <p className="hidden lg:block text-xs text-muted">{(dayMatches as Match[]).length} match{(dayMatches as Match[]).length === 1 ? "" : "es"}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
                   <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
 
       {/* PAST VIEW — newest first */}
       {view === "past" && (
-        <div className="space-y-6">
+        <div className="space-y-6 lg:space-y-8">
           {pastByDay.length === 0 && (
             <p className="py-12 text-center text-sm text-muted">No finished matches yet</p>
           )}
           {pastByDay.map(([day, dayMatches]) => (
-            <div key={day}>
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-muted">{day}</p>
-              <div className="space-y-3">
+            <section key={day}>
+              <div className="mb-2 px-1 lg:mb-4 lg:flex lg:items-center lg:gap-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted lg:text-sm">{day}</p>
+                <div className="hidden lg:block flex-1 h-px bg-border" />
+                <p className="hidden lg:block text-xs text-muted">{(dayMatches as Match[]).length} match{(dayMatches as Match[]).length === 1 ? "" : "es"}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
                   <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
@@ -235,55 +263,51 @@ export default function FixturesPage() {
             ))}
           </div>
 
-          <div className="space-y-3 mb-6">
-            {groupMatches.map(match => (
-              <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
-                onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
-            ))}
-            {groupMatches.length === 0 && (
-              <div className="py-12 text-center text-muted text-sm">No matches in Group {selectedWcGroup}</div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {groupMatches.map(match => (
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                    onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                ))}
+                {groupMatches.length === 0 && (
+                  <div className="py-12 text-center text-muted text-sm col-span-full">No matches in Group {selectedWcGroup}</div>
+                )}
+              </div>
+            </div>
+
+            {standings.length > 0 && (
+              <div className="lg:col-span-1">
+                <div className="rounded-2xl border border-border bg-surface overflow-hidden sticky top-4">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h2 className="font-semibold text-sm">Group {selectedWcGroup} Standings</h2>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted border-b border-border">
+                        <th className="px-3 py-2 text-left w-6">#</th>
+                        <th className="px-3 py-2 text-left">Team</th>
+                        <th className="px-2 py-2 text-center font-bold">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((s, i) => (
+                        <tr key={s.code}
+                          className={`border-b border-border last:border-0 cursor-pointer active:bg-surface-hover transition ${i < 2 ? "bg-accent/5" : ""}`}
+                          onClick={() => router.push(`/teams/${s.code}`)}
+                        >
+                          <td className="px-3 py-2.5"><span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span></td>
+                          <td className="px-3 py-2.5"><span className="mr-1"><Flag code={s.code} /></span><span className="font-semibold text-xs">{s.team}</span></td>
+                          <td className="px-2 py-2.5 text-center font-bold">{s.points}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="px-4 py-2 text-[10px] text-muted border-t border-border">Top 2 advance</p>
+                </div>
+              </div>
             )}
           </div>
-
-          {standings.length > 0 && (
-            <div className="rounded-2xl border border-border bg-surface overflow-hidden mb-4">
-              <div className="px-4 py-3 border-b border-border">
-                <h2 className="font-semibold text-sm">Group {selectedWcGroup} Standings</h2>
-              </div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-muted border-b border-border">
-                    <th className="px-3 py-2 text-left w-6">#</th>
-                    <th className="px-3 py-2 text-left">Team</th>
-                    <th className="px-2 py-2 text-center">P</th>
-                    <th className="px-2 py-2 text-center">W</th>
-                    <th className="px-2 py-2 text-center">D</th>
-                    <th className="px-2 py-2 text-center">L</th>
-                    <th className="px-2 py-2 text-center">GD</th>
-                    <th className="px-2 py-2 text-center font-bold">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.map((s, i) => (
-                    <tr key={s.code}
-                      className={`border-b border-border last:border-0 cursor-pointer active:bg-surface-hover transition ${i < 2 ? "bg-accent/5" : ""}`}
-                      onClick={() => router.push(`/teams/${s.code}`)}
-                    >
-                      <td className="px-3 py-2.5"><span className={`font-bold ${i < 2 ? "text-accent" : "text-muted"}`}>{i + 1}</span></td>
-                      <td className="px-3 py-2.5"><span className="mr-1"><Flag code={s.code} /></span><span className="font-semibold">{s.team}</span><span className="ml-1 text-[10px] text-muted uppercase">{s.code}</span></td>
-                      <td className="px-2 py-2.5 text-center text-muted">{s.played}</td>
-                      <td className="px-2 py-2.5 text-center text-muted">{s.won}</td>
-                      <td className="px-2 py-2.5 text-center text-muted">{s.drawn}</td>
-                      <td className="px-2 py-2.5 text-center text-muted">{s.lost}</td>
-                      <td className="px-2 py-2.5 text-center text-muted">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
-                      <td className="px-2 py-2.5 text-center font-bold">{s.points}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="px-4 py-2 text-[10px] text-muted border-t border-border">Top 2 advance · Highlighted in blue</p>
-            </div>
-          )}
         </>
       )}
 
@@ -351,8 +375,15 @@ function BetSheet({
   const [doubleUp, setDoubleUp] = useState(match.my_bet?.double_up === 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [minutesLeft, setMinutesLeft] = useState(() => Math.floor((match.match_date * 1000 - Date.now()) / 60000));
 
-  const minutesLeft = Math.floor((match.match_date * 1000 - Date.now()) / 60000);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMinutesLeft(Math.floor((match.match_date * 1000 - Date.now()) / 60000));
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [match.match_date]);
+
   const locked = minutesLeft <= 0 || match.status !== "scheduled";
 
   // How many double ups are still available (editing: if already set, it's still "used" by this bet)
@@ -380,8 +411,10 @@ function BetSheet({
   return (
     <>
       <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
+      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto
+                      lg:inset-auto lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:-translate-y-1/2
+                      lg:w-[28rem] lg:max-w-[90vw] lg:rounded-3xl lg:border lg:border-border">
+        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto lg:hidden" />
         <div className="mb-4 mt-3 text-center">
           <p className="text-xs text-muted uppercase tracking-widest">
             {match.group_name ? `Group ${match.group_name}` : match.stage}

@@ -62,7 +62,7 @@ export default function RankingsPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4 pb-4">
+    <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4 pb-4">
       <div className="mb-4">
         <h1 className="text-xl font-bold">Rankings</h1>
         {lastDayLabel && (

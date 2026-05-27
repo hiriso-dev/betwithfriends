@@ -44,6 +44,13 @@ function fmtTime(ts: number): string {
   });
 }
 
+function fmtDateTime(ts: number): string {
+  return new Date(ts * 1000).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
 function fmtCountdown(secs: number): string {
   if (secs <= 0) return "";
   const d = Math.floor(secs / 86400);
@@ -237,7 +244,10 @@ export default function MatchCard({
               {isLocked ? "🔒 Locked" : secondsLeft < 60 ? `⏱ ${secondsLeft}s` : `⏱ ${minutesLeft}m`}
             </span>
           ) : (
-            <span>{fmtTime(match.match_date)}</span>
+            <>
+              <span className="hidden lg:inline">{fmtDateTime(match.match_date)}</span>
+              <span className="lg:hidden">{fmtTime(match.match_date)}</span>
+            </>
           )}
         </span>
       </div>

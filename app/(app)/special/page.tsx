@@ -108,7 +108,7 @@ export default function SpecialPage() {
   const myBet = (type: string) => bets.find((b) => b.bet_type === type);
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-4">
+    <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4">
       <div className="mb-4">
         <h1 className="text-xl font-bold">Special Bets</h1>
         <p className="text-sm text-muted mt-0.5">
