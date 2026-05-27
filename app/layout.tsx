@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Bet With Friends" },
   icons: {
-    icon: [{ url: "/icon-512.png", type: "image/png", sizes: "512x512" }],
-    shortcut: "/icon-512.png",
-    apple: "/icon-512.png",
+    icon: [{ url: "/favicon-512.png", type: "image/png", sizes: "512x512" }],
+    shortcut: "/favicon-512.png",
+    apple: "/favicon-512.png",
   },
 };
 
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${geist.variable} h-full`} suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" href="/icon-512.png" />
+        <link rel="apple-touch-icon" href="/favicon-512.png" />
       </head>
       <body className="h-full bg-background text-foreground antialiased">
         <ServiceWorkerRegistrar />
