@@ -148,6 +148,7 @@ const worker = {
         };
 
         const result = await sendResultNotificationToUser(env, auth.userId, matchForNotification);
+        if (result.blockedReason) return err(result.blockedReason, 400, origin);
         if (result.found === 0) return err("No push subscription found for this account", 400, origin);
         if (result.sent === 0) {
           return err(

@@ -14,6 +14,7 @@ type Mode =
   | null;
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
+const INSTALL_SHEET_SEEN_KEY = "bwf-install-sheet-seen";
 
 function detectMode(): Mode | null {
   const ua = navigator.userAgent;
@@ -58,13 +59,13 @@ function isStandaloneMode(): boolean {
 
 function getInitialInstallMode(): Mode {
   if (typeof window === "undefined") return null;
-
-  const dismissed = localStorage.getItem("bwf-install-dismissed");
-  if (dismissed && Date.now() - Number(dismissed) < 7 * 86400000) {
-    return null;
-  }
-
   return detectMode();
+}
+
+function shouldAutoOpenInstallSheet(mode: Mode): boolean {
+  if (typeof window === "undefined") return false;
+  if (!mode) return false;
+  return !sessionStorage.getItem(INSTALL_SHEET_SEEN_KEY);
 }
 
 function installTitle(mode: Mode): string {
@@ -76,47 +77,59 @@ function installTitle(mode: Mode): string {
 
 function installDescription(mode: Mode): string {
   if (mode === "ios-other") {
-    return "iPhone installation has to start in Safari before push notifications can work.";
+    return "Open this page in Safari to install the app and get notification support on iPhone.";
   }
   if (mode === "ios-safari") {
-    return "Install the app from Safari to unlock the full-screen experience and push notifications on iPhone and iPad.";
+    return "Add the app from Safari for quicker access and notification support on iPhone and iPad.";
   }
   if (mode === "android-other") {
-    return "Your browser can still add this app to the home screen even without the install prompt.";
+    return "Add the app from your browser menu for quick access and easier notification support.";
   }
-  return "Install the app for faster access, a cleaner mobile layout, and notification-ready behavior.";
+  return "Install the app for one-tap access and notification support.";
 }
 
 // ---- Floating CTA + Sheet (global) ----
 
 export function InstallPrompt() {
   const [mode, setMode] = useState<Mode>(getInitialInstallMode);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<boolean>(() => shouldAutoOpenInstallSheet(getInitialInstallMode()));
 
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
       deferredPrompt = e as BeforeInstallPromptEvent;
-      setMode(detectMode());
+      const nextMode = detectMode();
+      setMode(nextMode);
+      if (shouldAutoOpenInstallSheet(nextMode)) {
+        sessionStorage.setItem(INSTALL_SHEET_SEEN_KEY, "1");
+        setOpen(true);
+      }
     };
     window.addEventListener("beforeinstallprompt", handler);
 
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  function dismiss() {
-    localStorage.setItem("bwf-install-dismissed", String(Date.now()));
+  useEffect(() => {
+    if (open) {
+      sessionStorage.setItem(INSTALL_SHEET_SEEN_KEY, "1");
+    }
+  }, [open]);
+
+  function closeSheet() {
     setOpen(false);
-    setMode(null);
   }
 
   async function install() {
     if (deferredPrompt) {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") deferredPrompt = null;
+      if (outcome === "accepted") {
+        deferredPrompt = null;
+        setMode(null);
+      }
     }
-    dismiss();
+    setOpen(false);
   }
 
   if (!mode) return null;
@@ -125,7 +138,7 @@ export function InstallPrompt() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed right-4 bottom-[84px] z-[70] flex items-center gap-3 rounded-full border border-accent/35 bg-surface/95 px-4 py-3 shadow-2xl backdrop-blur active:scale-95"
+        className="fixed inset-x-4 bottom-[84px] z-[70] flex items-center justify-between gap-3 rounded-2xl border border-accent/35 bg-surface/95 px-4 py-3 shadow-2xl backdrop-blur active:scale-95 sm:inset-x-auto sm:right-4 sm:w-auto sm:justify-start sm:rounded-full"
         aria-label="Open install app instructions"
       >
         <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-accent/18 text-accent">
@@ -140,7 +153,8 @@ export function InstallPrompt() {
         </span>
         <span className="min-w-0 text-left">
           <span className="block text-xs font-black uppercase tracking-[0.2em] text-accent">Install</span>
-          <span className="block text-sm font-semibold">Get app benefits</span>
+          <span className="block text-sm font-semibold">Install app</span>
+          <span className="block text-xs text-muted">Notifications + one-tap access</span>
         </span>
       </button>
 
@@ -156,7 +170,7 @@ export function InstallPrompt() {
                   <p className="mt-2 text-sm leading-relaxed text-muted">{installDescription(mode)}</p>
                 </div>
                 <button
-                  onClick={() => setOpen(false)}
+                  onClick={closeSheet}
                   className="rounded-full border border-border p-2 text-muted transition active:scale-95"
                   aria-label="Close install instructions"
                 >
@@ -164,29 +178,21 @@ export function InstallPrompt() {
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <BenefitCard
-                  title="Notifications"
-                  description="Stay closer to reminders and match results, even when you are away from the app."
-                />
-                <BenefitCard
-                  title="One tap"
-                  description="Jump straight in from the home screen without reopening the browser every time."
-                />
-                <BenefitCard
-                  title="Cleaner view"
-                  description="Use a more app-like full-screen layout on mobile without browser chrome." 
-                />
+              <div className="rounded-2xl border border-border bg-background/40 p-4">
+                <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-accent">Why install</p>
+                <div className="space-y-2">
+                  <BenefitLine text="Get reminders and result notifications more reliably." />
+                  <BenefitLine text="Open BetWithFriends in one tap from your home screen." />
+                </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-border bg-background/40 p-4">
+              <div className="mt-4 rounded-2xl border border-border bg-background/40 p-4">
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-accent">How to install</p>
 
                 {mode === "prompt" && (
                   <div className="space-y-3">
                     <Step number="1" text="Tap the install button below." />
                     <Step number="2" text="Confirm the browser install prompt." />
-                    <Step number="3" text="Open BetWithFriends from your home screen next time." />
                     <button
                       onClick={install}
                       className="mt-1 w-full rounded-xl bg-accent py-3 font-bold text-[#0f0f23] transition active:scale-95"
@@ -199,16 +205,14 @@ export function InstallPrompt() {
                 {mode === "ios-safari" && (
                   <div className="space-y-3">
                     <Step number="1" text="Tap Share ⬆ at the bottom of Safari." />
-                    <Step number="2" text="Choose Add to Home Screen." />
-                    <Step number="3" text="Tap Add, then open the app from your home screen." />
+                    <Step number="2" text="Choose Add to Home Screen, then tap Add." />
                   </div>
                 )}
 
                 {mode === "ios-other" && (
                   <div className="space-y-3">
                     <Step number="1" text="Open this page in Safari first." />
-                    <Step number="2" text="In Safari, tap Share ⬆." />
-                    <Step number="3" text="Choose Add to Home Screen, then tap Add." />
+                    <Step number="2" text="In Safari, use Share ⬆ then Add to Home Screen." />
                     <a
                       href={safariUrl()}
                       className="mt-1 block w-full rounded-xl bg-accent py-3 text-center font-bold text-[#0f0f23] transition active:scale-95"
@@ -222,23 +226,20 @@ export function InstallPrompt() {
                   <div className="space-y-3">
                     <Step number="1" text="Open your browser menu using ⋮ or the share/menu button." />
                     <Step number="2" text="Tap Add to Home Screen or Install app." />
-                    <Step number="3" text="Confirm the shortcut, then launch BetWithFriends from your home screen." />
                   </div>
                 )}
               </div>
 
-              <div className="mt-5 flex gap-3">
+              <p className="mt-4 text-center text-xs text-muted">
+                This install recommendation stays visible until the app is installed.
+              </p>
+
+              <div className="mt-4">
                 <button
-                  onClick={dismiss}
-                  className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold text-muted transition active:scale-95"
+                  onClick={closeSheet}
+                  className="w-full rounded-xl border border-border py-3 text-sm font-semibold text-muted transition active:scale-95"
                 >
-                  Hide for now
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="flex-1 rounded-xl bg-surface-hover py-3 text-sm font-semibold transition active:scale-95"
-                >
-                  Keep icon
+                  Not now
                 </button>
               </div>
             </div>
@@ -288,11 +289,11 @@ export function useInstallable(): InstallInfo {
   return { mode, isStandalone, triggerInstall };
 }
 
-function BenefitCard({ title, description }: { title: string; description: string }) {
+function BenefitLine({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-background/40 p-3">
-      <p className="text-sm font-bold">{title}</p>
-      <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
+    <div className="flex items-start gap-3">
+      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-accent" />
+      <p className="text-sm leading-relaxed text-muted">{text}</p>
     </div>
   );
 }

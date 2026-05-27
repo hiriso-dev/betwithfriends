@@ -1,5 +1,5 @@
 import { calcPoints } from "./scoring";
-import { Env, Match } from "../types";
+import { Bet, Env, Match } from "../types";
 
 type PushPayload = {
   title: string;
@@ -59,6 +59,7 @@ type UserNotificationSendResult = {
   found: number;
   sent: number;
   firstError?: string;
+  blockedReason?: string;
 };
 
 type MatchBetSummary = {
@@ -66,6 +67,13 @@ type MatchBetSummary = {
   totalPoints: number | null;
   sampleHomeScorePred: number | null;
   sampleAwayScorePred: number | null;
+  sampleConfidence: Bet["confidence"];
+};
+
+const CONFIDENCE_LABELS: Record<NonNullable<Bet["confidence"]>, string> = {
+  cautious: "😬 Cautious",
+  confident: "👍 Confident",
+  reckless: "🔥 Reckless",
 };
 
 let webPushRequestDetailsPromise: Promise<GenerateRequestDetailsFn> | null = null;
@@ -224,35 +232,67 @@ function formatPoints(points: number): string {
   return `${points > 0 ? "+" : ""}${points.toFixed(1)}pts`;
 }
 
+function formatConfidence(confidence: Bet["confidence"]): string | null {
+  if (!confidence) return null;
+  return CONFIDENCE_LABELS[confidence];
+}
+
+function hasAvailablePoints(summary: MatchBetSummary): boolean {
+  return summary.totalPoints !== null;
+}
+
 function buildResultNotificationBody(
   match: Pick<Match, "home_team" | "away_team" | "home_score" | "away_score">,
   summary: MatchBetSummary
 ): string {
-  const scoreline = match.home_score !== null && match.away_score !== null
-    ? `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`
-    : `${match.home_team} vs ${match.away_team} — result available in the app`;
+  const lines = [`Match: ${match.home_team} vs ${match.away_team}`];
+
+  if (match.home_score !== null && match.away_score !== null) {
+    lines.push(`Score: ${match.home_score}–${match.away_score}`);
+  } else {
+    lines.push("Score: Available in the app");
+  }
 
   if (summary.betCount === 0) {
-    return scoreline;
+    return lines.join("\n");
   }
 
   if (summary.totalPoints === null) {
+    lines.push("Points: Pending");
+
     if (summary.betCount === 1 && summary.sampleHomeScorePred !== null && summary.sampleAwayScorePred !== null) {
-      return `${scoreline} · Your prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`;
+      lines.push(`Prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`);
+
+      const confidence = formatConfidence(summary.sampleConfidence);
+      if (confidence) {
+        lines.push(`Confidence: ${confidence}`);
+      }
+
+      return lines.join("\n");
     }
 
-    return `${scoreline} · Open the app to review your bets across ${summary.betCount} groups`;
+    lines.push(`Details: Open the app to review your bets across ${summary.betCount} groups`);
+    return lines.join("\n");
   }
 
   if (summary.betCount === 1) {
-    const prediction = summary.sampleHomeScorePred !== null && summary.sampleAwayScorePred !== null
-      ? ` · Your prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`
-      : "";
+    lines.push(`Points: ${formatPoints(summary.totalPoints)}`);
 
-    return `${scoreline} · You scored ${formatPoints(summary.totalPoints)}${prediction}`;
+    if (summary.sampleHomeScorePred !== null && summary.sampleAwayScorePred !== null) {
+      lines.push(`Prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`);
+    }
+
+    const confidence = formatConfidence(summary.sampleConfidence);
+    if (confidence) {
+      lines.push(`Confidence: ${confidence}`);
+    }
+
+    return lines.join("\n");
   }
 
-  return `${scoreline} · You scored ${formatPoints(summary.totalPoints)} across ${summary.betCount} groups`;
+  lines.push(`Points: ${formatPoints(summary.totalPoints)} across ${summary.betCount} groups`);
+  lines.push(`Details: Open the app to review your bets across ${summary.betCount} groups`);
+  return lines.join("\n");
 }
 
 async function getUserMatchBetSummary(
@@ -267,7 +307,7 @@ async function getUserMatchBetSummary(
   `).bind(userId, match.id).all<{
     home_score_pred: number;
     away_score_pred: number;
-    confidence: string | null;
+    confidence: Bet["confidence"];
     double_up: number;
     points_earned: number | null;
   }>();
@@ -278,6 +318,7 @@ async function getUserMatchBetSummary(
       totalPoints: null,
       sampleHomeScorePred: null,
       sampleAwayScorePred: null,
+      sampleConfidence: null,
     };
   }
 
@@ -299,6 +340,7 @@ async function getUserMatchBetSummary(
       totalPoints,
       sampleHomeScorePred: firstBet.home_score_pred,
       sampleAwayScorePred: firstBet.away_score_pred,
+      sampleConfidence: firstBet.confidence,
     };
   }
 
@@ -310,6 +352,7 @@ async function getUserMatchBetSummary(
       totalPoints,
       sampleHomeScorePred: firstBet.home_score_pred,
       sampleAwayScorePred: firstBet.away_score_pred,
+      sampleConfidence: firstBet.confidence,
     };
   }
 
@@ -318,30 +361,34 @@ async function getUserMatchBetSummary(
     totalPoints: null,
     sampleHomeScorePred: firstBet.home_score_pred,
     sampleAwayScorePred: firstBet.away_score_pred,
+    sampleConfidence: firstBet.confidence,
   };
 }
 
 export async function sendMatchResultNotifications(env: Env, match: Match): Promise<void> {
-  // Send results to all subscribed users, with extra scoring context when they placed a bet.
+  // Only send result notifications once the user's bet points are actually available.
   const rows = await env.DB.prepare(`
     SELECT
       ps.user_id,
       ps.subscription_json,
       COUNT(b.id) AS bet_count,
-      SUM(COALESCE(b.points_earned, 0)) AS total_points,
+      COALESCE(SUM(b.points_earned), 0) AS total_points,
       MIN(b.home_score_pred) AS sample_home_score_pred,
-      MIN(b.away_score_pred) AS sample_away_score_pred
+      MIN(b.away_score_pred) AS sample_away_score_pred,
+      MIN(b.confidence) AS sample_confidence
     FROM push_subscriptions ps
     JOIN notification_prefs np ON np.user_id = ps.user_id AND np.result_after_game = 1
-    LEFT JOIN bets b ON b.user_id = ps.user_id AND b.match_id = ?
+    JOIN bets b ON b.user_id = ps.user_id AND b.match_id = ?
     GROUP BY ps.user_id, ps.subscription_json
+    HAVING COUNT(b.id) > 0 AND COUNT(b.points_earned) = COUNT(b.id)
   `).bind(match.id).all<{
     user_id: string;
     subscription_json: string;
     bet_count: number;
-    total_points: number | null;
+    total_points: number;
     sample_home_score_pred: number | null;
     sample_away_score_pred: number | null;
+    sample_confidence: Bet["confidence"];
   }>();
 
   for (const row of rows.results) {
@@ -351,9 +398,10 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
     const sub = JSON.parse(row.subscription_json) as PushSubscription;
     const body = buildResultNotificationBody(match, {
       betCount: row.bet_count,
-      totalPoints: row.bet_count > 0 ? (row.total_points ?? 0) : null,
+      totalPoints: row.total_points,
       sampleHomeScorePred: row.sample_home_score_pred,
       sampleAwayScorePred: row.sample_away_score_pred,
+      sampleConfidence: row.bet_count === 1 ? row.sample_confidence : null,
     });
 
     const result = await sendPush(env, sub, {
@@ -480,6 +528,14 @@ export async function sendResultNotificationToUser(
   match: Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score">
 ): Promise<UserNotificationSendResult> {
   const summary = await getUserMatchBetSummary(env, userId, match);
+  if (!hasAvailablePoints(summary)) {
+    return {
+      found: 0,
+      sent: 0,
+      blockedReason: "Result notifications only send once points are available for your bet(s).",
+    };
+  }
+
   const body = buildResultNotificationBody(match, summary);
 
   return sendNotificationToUser(env, userId, {
