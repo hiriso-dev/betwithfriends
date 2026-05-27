@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { apiFetch } from "@/lib/api";
 
 const STORAGE_KEY = "bwf-rules-seen";
 
@@ -7,9 +8,22 @@ export function useHelpDialog() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      setOpen(true);
+    if (localStorage.getItem(STORAGE_KEY)) {
+      return;
     }
+
+    apiFetch<{ id: string; my_bet?: unknown }[]>("/api/matches")
+      .then((matches) => {
+        const hasBets = matches.some((m) => m.my_bet);
+        if (!hasBets) {
+          setOpen(true);
+        }
+        localStorage.setItem(STORAGE_KEY, "1");
+      })
+      .catch(() => {
+        setOpen(true);
+        localStorage.setItem(STORAGE_KEY, "1");
+      });
   }, []);
 
   function close() {
@@ -25,7 +39,16 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
     <>
       <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-x-4 top-[50%] z-[70] max-h-[80vh] -translate-y-1/2 overflow-y-auto rounded-3xl bg-surface shadow-2xl">
-        <div className="p-6">
+        <div className="relative p-6">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 rounded-full p-2 text-muted hover:bg-border hover:text-foreground transition"
+            aria-label="Close"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
           <div className="mb-5 text-center">
             <div className="mb-2 text-4xl">⚽</div>
             <h2 className="text-xl font-black">How to play</h2>
@@ -84,7 +107,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="mt-2 w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95"
           >
-            Got it — let's play!
+            Got it &mdash; let&apos;s play!
           </button>
         </div>
       </div>

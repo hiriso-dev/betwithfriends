@@ -95,30 +95,33 @@ export default function MatchCard({
 }) {
   const router = useRouter();
 
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+
   const kickoff = match.match_date * 1000;
   const secondsLeft = Math.floor((kickoff - now) / 1000);
   const minutesLeft = Math.floor(secondsLeft / 60);
   const isLocked = secondsLeft <= 0 || match.status !== "scheduled";
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
+
   const hasBet = !!match.my_bet;
   const canBet = !!groupId && !isLocked && !isFinished && !isLive;
 
-  // Show bet inputs immediately for unbet bettable matches — no tap required
-  const [quickMode, setQuickMode] = useState(!hasBet && canBet);
-  const [qHome, setQHome] = useState(match.my_bet?.home_score_pred ?? 0);
-  const [qAway, setQAway] = useState(match.my_bet?.away_score_pred ?? 0);
-  const [qConfidence, setQConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
-  const [qDoubleUp, setQDoubleUp] = useState((match.my_bet?.double_up ?? 0) === 1);
+  const [formState, setFormState] = useState({
+    quickMode: !hasBet && canBet,
+    qHome: match.my_bet?.home_score_pred ?? 0,
+    qAway: match.my_bet?.away_score_pred ?? 0,
+    qConfidence: match.my_bet?.confidence ?? null,
+    qDoubleUp: (match.my_bet?.double_up ?? 0) === 1,
+  });
+  const { quickMode, qHome, qAway, qConfidence, qDoubleUp } = formState;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [, setTick] = useState(0);
 
   const fastRefresh = secondsLeft < 300;
   useEffect(() => {
     if (isLocked) return;
-    const id = setInterval(() => setTick(n => n + 1), fastRefresh ? 1000 : 60000);
+    const id = setInterval(() => setNow(Date.now()), fastRefresh ? 1000 : 60000);
     return () => clearInterval(id);
   }, [isLocked, fastRefresh]);
 
@@ -131,27 +134,35 @@ export default function MatchCard({
   }`;
   useEffect(() => {
     if (saving) return;
-    setQuickMode(!match.my_bet && !!groupId && !isLocked && !isFinished && !isLive);
-    setQHome(match.my_bet?.home_score_pred ?? 0);
-    setQAway(match.my_bet?.away_score_pred ?? 0);
-    setQConfidence(match.my_bet?.confidence ?? null);
-    setQDoubleUp((match.my_bet?.double_up ?? 0) === 1);
+    // Sync form state with match data when bet changes; batched into single setState
+    // eslint-disable-next-line
+    setFormState(prev => ({
+      ...prev,
+      quickMode: !match.my_bet && !!groupId && !isLocked && !isFinished && !isLive,
+      qHome: match.my_bet?.home_score_pred ?? 0,
+      qAway: match.my_bet?.away_score_pred ?? 0,
+      qConfidence: match.my_bet?.confidence ?? null,
+      qDoubleUp: (match.my_bet?.double_up ?? 0) === 1,
+    }));
     setSaveError(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [betKey]);
 
   function enterEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
-    setQHome(match.my_bet?.home_score_pred ?? 0);
-    setQAway(match.my_bet?.away_score_pred ?? 0);
-    setQConfidence(match.my_bet?.confidence ?? null);
-    setQDoubleUp((match.my_bet?.double_up ?? 0) === 1);
-    setQuickMode(true);
+    setFormState(prev => ({
+      ...prev,
+      quickMode: true,
+      qHome: match.my_bet?.home_score_pred ?? 0,
+      qAway: match.my_bet?.away_score_pred ?? 0,
+      qConfidence: match.my_bet?.confidence ?? null,
+      qDoubleUp: (match.my_bet?.double_up ?? 0) === 1,
+    }));
   }
 
   function cancelEdit(e?: React.MouseEvent) {
     e?.stopPropagation();
-    setQuickMode(false);
+    setFormState(prev => ({ ...prev, quickMode: false }));
   }
 
   async function saveQuick(e: React.MouseEvent) {
@@ -171,7 +182,7 @@ export default function MatchCard({
           double_up: qDoubleUp ? 1 : 0,
         }),
       });
-      setQuickMode(false);
+      setFormState(prev => ({ ...prev, quickMode: false }));
       onSaved?.();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save bet");
@@ -245,9 +256,9 @@ export default function MatchCard({
             </button>
 
             <div className="flex items-start gap-3">
-              <TapScore value={qHome} onChange={setQHome} />
+              <TapScore value={qHome} onChange={(v) => setFormState(prev => ({ ...prev, qHome: v }))} />
               <span className="mt-3.5 text-xl font-black text-muted">–</span>
-              <TapScore value={qAway} onChange={setQAway} />
+              <TapScore value={qAway} onChange={(v) => setFormState(prev => ({ ...prev, qAway: v }))} />
             </div>
 
             <button
@@ -264,7 +275,7 @@ export default function MatchCard({
           <div className="mb-3 rounded-xl border border-border p-3 relative">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setQuickMode(false); onBet(); }}
+              onClick={(e) => { e.stopPropagation(); onBet(); }}
               className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full border border-border text-[9px] font-bold text-muted transition active:border-accent active:text-accent"
               title="Scoring options"
             >
@@ -276,7 +287,7 @@ export default function MatchCard({
                 <div key={value} className="flex flex-col items-center gap-1">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setQConfidence(qConfidence === value ? null : value); }}
+                    onClick={(e) => { e.stopPropagation(); setFormState(prev => ({ ...prev, qConfidence: prev.qConfidence === value ? null : value })); }}
                     className={`h-10 w-10 rounded-full text-xl border-2 transition active:scale-95 ${
                       qConfidence === value ? "border-accent bg-accent/15" : "border-border bg-surface-hover"
                     }`}
@@ -293,7 +304,7 @@ export default function MatchCard({
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setQDoubleUp(d => !d); }}
+                  onClick={(e) => { e.stopPropagation(); setFormState(prev => ({ ...prev, qDoubleUp: !prev.qDoubleUp })); }}
                   className={`rounded-full px-3 h-10 text-sm font-black border-2 transition active:scale-95 ${
                     qDoubleUp ? "bg-accent text-[#0f0f23] border-accent" : "border-border text-muted bg-surface-hover"
                   }`}
