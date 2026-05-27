@@ -88,6 +88,18 @@ curl -X POST http://localhost:8787/api/dev/score-match \
   -H "Content-Type: application/json" \
   -d '{"match_id":"<id>","home_score":2,"away_score":1}'
 
+# Send a reminder notification right now to your own subscribed devices
+curl -X POST http://localhost:8787/api/dev/send-reminder \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"match_id":"<id>"}'
+
+# Send a result notification right now to your own subscribed devices
+curl -X POST http://localhost:8787/api/dev/send-result \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"match_id":"<id>","home_score":2,"away_score":1}'
+
 # Reset local DB to clean state + all fixtures
 cd worker && wrangler d1 execute betwithfriends --local \
   --file=src/db/reset-and-seed.sql --config=wrangler.toml

@@ -54,7 +54,7 @@ type PushSendResult = {
   errorMessage?: string;
 };
 
-type TestNotificationResult = {
+type UserNotificationSendResult = {
   found: number;
   sent: number;
   firstError?: string;
@@ -319,7 +319,12 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
   }
 }
 
-export async function sendTestNotification(env: Env, userId: string): Promise<TestNotificationResult> {
+async function sendNotificationToUser(
+  env: Env,
+  userId: string,
+  payload: PushPayload,
+  options: PushSendOptions
+): Promise<UserNotificationSendResult> {
   const rows = await env.DB.prepare(`
     SELECT subscription_json
     FROM push_subscriptions
@@ -331,18 +336,7 @@ export async function sendTestNotification(env: Env, userId: string): Promise<Te
 
   for (const row of rows.results) {
     const sub = JSON.parse(row.subscription_json) as PushSubscription;
-    const result = await sendPush(env, sub, {
-      title: "Test notification",
-      body: "BetWithFriends notifications are working on this device.",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      tag: `test-${userId}`,
-      url: "/profile",
-    }, {
-      topic: "test-notification",
-      urgency: "high",
-      ttl: 5 * 60,
-    });
+    const result = await sendPush(env, sub, payload, options);
 
     if (result.ok) {
       sent += 1;
@@ -356,4 +350,61 @@ export async function sendTestNotification(env: Env, userId: string): Promise<Te
     sent,
     firstError,
   };
+}
+
+export async function sendReminderNotificationToUser(
+  env: Env,
+  userId: string,
+  match: Pick<Match, "id" | "home_team" | "away_team">
+): Promise<UserNotificationSendResult> {
+  return sendNotificationToUser(env, userId, {
+    title: "⏰ Game in 1 hour!",
+    body: `${match.home_team} vs ${match.away_team} — place your prediction now`,
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: `reminder-${match.id}`,
+    url: "/fixtures",
+  }, {
+    topic: `reminder-test-${match.id}`,
+    urgency: "high",
+    ttl: 90 * 60,
+  });
+}
+
+export async function sendResultNotificationToUser(
+  env: Env,
+  userId: string,
+  match: Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score">
+): Promise<UserNotificationSendResult> {
+  const body = match.home_score !== null && match.away_score !== null
+    ? `${match.home_team} ${match.home_score}–${match.away_score} ${match.away_team}`
+    : `${match.home_team} vs ${match.away_team} — result available in the app`;
+
+  return sendNotificationToUser(env, userId, {
+    title: "⚽ Match result",
+    body,
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: `result-${match.id}`,
+    url: "/fixtures",
+  }, {
+    topic: `result-test-${match.id}`,
+    urgency: "high",
+    ttl: 6 * 3600,
+  });
+}
+
+export async function sendTestNotification(env: Env, userId: string): Promise<UserNotificationSendResult> {
+  return sendNotificationToUser(env, userId, {
+    title: "Test notification",
+    body: "BetWithFriends notifications are working on this device.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    tag: `test-${userId}`,
+    url: "/profile",
+  }, {
+    topic: "test-notification",
+    urgency: "high",
+    ttl: 5 * 60,
+  });
 }

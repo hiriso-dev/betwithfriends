@@ -1,4 +1,4 @@
-import { Env } from "./types";
+import { Env, Match } from "./types";
 import { handleAuth } from "./handlers/auth";
 import { handleGroups } from "./handlers/groups";
 import { handleMatches } from "./handlers/matches";
@@ -9,7 +9,11 @@ import { handleStandings } from "./handlers/standings";
 import { handleAdmin } from "./handlers/admin";
 import { syncScores, syncScorers } from "./services/scores-sync";
 import { processMatchResult } from "./services/scoring";
-import { sendPreGameReminders } from "./services/push-service";
+import {
+  sendPreGameReminders,
+  sendReminderNotificationToUser,
+  sendResultNotificationToUser,
+} from "./services/push-service";
 
 const corsHeaders = (origin: string) => ({
   "Access-Control-Allow-Origin": origin,
@@ -29,7 +33,7 @@ function err(message: string, status = 400, origin = "*") {
   return json({ error: message }, status, origin);
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get("Origin") ?? "*";
 
@@ -98,6 +102,73 @@ export default {
         return json({ ok: true, match_id }, 200, origin);
       }
 
+      if (pathname === "/api/dev/send-reminder" && request.method === "POST") {
+        const { match_id } = await request.json<{ match_id: string }>();
+        if (!match_id) return err("match_id is required", 400, origin);
+
+        const match = await env.DB.prepare(
+          "SELECT id, home_team, away_team FROM matches WHERE id = ?"
+        ).bind(match_id).first<Pick<Match, "id" | "home_team" | "away_team">>();
+
+        if (!match) return err("Match not found", 404, origin);
+
+        const result = await sendReminderNotificationToUser(env, auth.userId, match);
+        if (result.found === 0) return err("No push subscription found for this account", 400, origin);
+        if (result.sent === 0) {
+          return err(
+            result.firstError
+              ? `Push subscription found, but delivery failed: ${result.firstError}`
+              : "Push subscription found, but delivery failed.",
+            502,
+            origin
+          );
+        }
+
+        return json({ ok: true, sent: result.sent, found: result.found, match_id }, 200, origin);
+      }
+
+      if (pathname === "/api/dev/send-result" && request.method === "POST") {
+        const { match_id, home_score, away_score } = await request.json<{
+          match_id: string;
+          home_score?: number;
+          away_score?: number;
+        }>();
+        if (!match_id) return err("match_id is required", 400, origin);
+
+        const match = await env.DB.prepare(
+          "SELECT id, home_team, away_team, home_score, away_score FROM matches WHERE id = ?"
+        ).bind(match_id).first<Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score">>();
+
+        if (!match) return err("Match not found", 404, origin);
+
+        const matchForNotification = {
+          ...match,
+          home_score: typeof home_score === "number" ? home_score : match.home_score,
+          away_score: typeof away_score === "number" ? away_score : match.away_score,
+        };
+
+        const result = await sendResultNotificationToUser(env, auth.userId, matchForNotification);
+        if (result.found === 0) return err("No push subscription found for this account", 400, origin);
+        if (result.sent === 0) {
+          return err(
+            result.firstError
+              ? `Push subscription found, but delivery failed: ${result.firstError}`
+              : "Push subscription found, but delivery failed.",
+            502,
+            origin
+          );
+        }
+
+        return json({
+          ok: true,
+          sent: result.sent,
+          found: result.found,
+          match_id,
+          home_score: matchForNotification.home_score,
+          away_score: matchForNotification.away_score,
+        }, 200, origin);
+      }
+
       return err("Not found", 404, origin);
     } catch (e) {
       console.error(e);
@@ -111,6 +182,8 @@ export default {
     await sendPreGameReminders(env);
   },
 };
+
+export default worker;
 
 async function verifyJWT(token: string, secret: string) {
   try {

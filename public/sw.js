@@ -37,17 +37,19 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/fixtures";
+  const url = new URL(event.notification.data?.url ?? "/fixtures", self.location.origin).toString();
   event.waitUntil(
-    self.clients.matchAll({ type: "window" }).then((clients) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
-        if (client.url.includes(self.location.origin) && "focus" in client) {
-          client.focus();
-          client.navigate(url);
+        if (client.url.startsWith(self.location.origin) && "focus" in client) {
+          await client.focus();
+          if ("navigate" in client) {
+            await client.navigate(url);
+          }
           return;
         }
       }
-      self.clients.openWindow(url);
+      await self.clients.openWindow(url);
     })
   );
 });
