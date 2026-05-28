@@ -376,9 +376,21 @@ export default function MatchCard({
 
             <div className="flex items-center gap-2 min-w-[80px] justify-center">
               {isFinished || isLive ? (
-                <span className="text-2xl font-black tabular-nums">
-                  {match.home_score ?? 0} – {match.away_score ?? 0}
-                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const params = groupId ? `?group_id=${groupId}` : "";
+                    router.push(`/matches/${match.id}/bets${params}`);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 transition active:bg-surface-hover"
+                  title="See everyone's bets"
+                >
+                  <span className="text-2xl font-black tabular-nums">
+                    {match.home_score ?? 0} – {match.away_score ?? 0}
+                  </span>
+                  <span className="text-base text-muted">👁</span>
+                </button>
               ) : (
                 <span className="rounded-lg border border-dashed border-border px-4 py-1 text-sm text-muted">vs</span>
               )}
