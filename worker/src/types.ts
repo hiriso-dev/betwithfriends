@@ -6,6 +6,11 @@ export interface Env {
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
+  /** Resend API key (set via `wrangler secret put RESEND_API_KEY`). */
+  RESEND_API_KEY?: string;
+  /** Sender address for transactional email, e.g. "noreply@yourdomain.com".
+   *  Must be on a domain verified in Resend. */
+  EMAIL_FROM?: string;
 }
 
 export type AuthContext = {

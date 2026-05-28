@@ -96,6 +96,13 @@ function LoginContent() {
               className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-foreground placeholder:text-muted focus:border-accent focus:outline-none transition"
             />
           </div>
+          {mode === "login" && (
+            <div className="text-right">
+              <a href="/forgot-password" className="text-sm text-accent hover:underline">
+                Forgot password?
+              </a>
+            </div>
+          )}
           {error && <p className="text-sm text-danger">{error}</p>}
           <button
             type="submit"

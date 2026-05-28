@@ -82,6 +82,73 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
   return timingSafeEqual(computed, expectedHash);
 }
 
+const RESET_TOKEN_TTL_SECONDS = 60 * 60; // links expire after 1 hour
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function ensurePasswordResetTable(env: Env): Promise<void> {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      expires_at INTEGER NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch())
+    )`
+  ).run();
+}
+
+async function sendResetEmail(env: Env, to: string, link: string): Promise<void> {
+  // No key configured (e.g. local dev): log the link so the flow is still
+  // testable. Always returns without throwing so the caller can respond 200.
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    console.log(`[password-reset] Resend not configured. Reset link for ${to}: ${link}`);
+    return;
+  }
+
+  const text =
+    `We received a request to reset your BetWithFriends password.\n\n` +
+    `Reset it here (this link expires in 1 hour):\n${link}\n\n` +
+    `If you didn't request this, you can safely ignore this email.`;
+
+  const html =
+    `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">` +
+    `<h2 style="margin:0 0 12px">Reset your password</h2>` +
+    `<p>We received a request to reset your BetWithFriends password.</p>` +
+    `<p style="margin:24px 0"><a href="${link}" style="background:#16e0a3;color:#0f0f23;` +
+    `padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Reset password</a></p>` +
+    `<p style="color:#666;font-size:13px">This link expires in 1 hour. ` +
+    `If you didn't request this, you can safely ignore this email.</p>` +
+    `<p style="color:#999;font-size:12px;word-break:break-all">${link}</p>` +
+    `</div>`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `BetWithFriends <${env.EMAIL_FROM}>`,
+        to: [to],
+        subject: "Reset your BetWithFriends password",
+        text,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[password-reset] Resend responded ${res.status}: ${await res.text()}`);
+    }
+  } catch (e) {
+    // Don't surface to the caller (privacy: response is identical either way).
+    console.error("[password-reset] send failed:", e);
+  }
+}
+
 async function ensurePasswordColumn(env: Env): Promise<void> {
   try {
     await env.DB.prepare("SELECT password_hash FROM users LIMIT 1").first();
@@ -163,6 +230,68 @@ export async function handleAuth(
     );
 
     return json({ jwt }, 200, origin);
+  }
+
+  // POST /api/auth/forgot-password — issue a reset token and email a link.
+  // Always returns 200 so we never reveal whether an email is registered.
+  if (pathname === "/api/auth/forgot-password" && request.method === "POST") {
+    await ensurePasswordColumn(env);
+    await ensurePasswordResetTable(env);
+
+    const { email } = await request.json<{ email: string }>();
+    const normalizedEmail = (email ?? "").toLowerCase().trim();
+
+    if (normalizedEmail.includes("@")) {
+      const user = await env.DB.prepare("SELECT id, password_hash FROM users WHERE email = ?")
+        .bind(normalizedEmail).first<{ id: string; password_hash: string | null }>();
+
+      // Only for accounts that actually have a password set.
+      if (user && user.password_hash) {
+        const token = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+        const tokenHash = await sha256Hex(token);
+        const expiresAt = Math.floor(Date.now() / 1000) + RESET_TOKEN_TTL_SECONDS;
+
+        // Invalidate any previous outstanding tokens for this user.
+        await env.DB.prepare("UPDATE password_reset_tokens SET used = 1 WHERE user_id = ? AND used = 0")
+          .bind(user.id).run();
+        await env.DB.prepare(
+          "INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)"
+        ).bind(tokenHash, user.id, expiresAt).run();
+
+        const link = `${env.APP_URL}/reset-password?token=${token}`;
+        await sendResetEmail(env, normalizedEmail, link);
+      }
+    }
+
+    return json({ ok: true }, 200, origin);
+  }
+
+  // POST /api/auth/reset-password — consume a token and set a new password.
+  if (pathname === "/api/auth/reset-password" && request.method === "POST") {
+    await ensurePasswordColumn(env);
+    await ensurePasswordResetTable(env);
+
+    const { token, password } = await request.json<{ token: string; password: string }>();
+    if (!token) return err("Invalid or expired reset link", 400, origin);
+    if (!password || password.length < 8) return err("Password must be at least 8 characters", 400, origin);
+
+    const tokenHash = await sha256Hex(token);
+    const row = await env.DB.prepare(
+      "SELECT user_id, expires_at, used FROM password_reset_tokens WHERE token_hash = ?"
+    ).bind(tokenHash).first<{ user_id: string; expires_at: number; used: number }>();
+
+    const now = Math.floor(Date.now() / 1000);
+    if (!row || row.used || row.expires_at < now) {
+      return err("Invalid or expired reset link", 400, origin);
+    }
+
+    const passwordHash = await hashPassword(password);
+    await env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+      .bind(passwordHash, row.user_id).run();
+    await env.DB.prepare("UPDATE password_reset_tokens SET used = 1 WHERE token_hash = ?")
+      .bind(tokenHash).run();
+
+    return json({ ok: true }, 200, origin);
   }
 
   if ((pathname === "/api/auth/magic-link" || pathname === "/api/auth/verify") && request.method !== "OPTIONS") {

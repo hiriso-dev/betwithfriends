@@ -7,6 +7,17 @@ CREATE TABLE IF NOT EXISTS users (
   created_at INTEGER DEFAULT (unixepoch())
 );
 
+-- Forgot-password flow. We store only the SHA-256 hash of the token, never the
+-- token itself; a leaked DB then can't be used to reset accounts.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  expires_at INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens (user_id);
+
 CREATE TABLE IF NOT EXISTS groups (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
