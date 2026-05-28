@@ -10,7 +10,10 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get("bwf_token")?.value;
   if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    const next = pathname + request.nextUrl.search;
+    if (next !== "/") loginUrl.searchParams.set("next", next);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
