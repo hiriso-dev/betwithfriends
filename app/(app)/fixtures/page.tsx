@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import MatchCard from "@/components/match-card";
 import { HelpDialog, useHelpDialog } from "@/components/help-dialog";
@@ -61,6 +61,9 @@ export default function FixturesPage() {
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showPast, setShowPast] = useState(false);
+  const pastSectionRef = useRef<HTMLDivElement>(null);
+  const prevShowPastRef = useRef(false);
 
   useEffect(() => {
     const el = document.getElementById("scroll-main");
@@ -69,6 +72,38 @@ export default function FixturesPage() {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Disable native scroll anchoring on this page so we can deterministically control
+  // scroll position when past matches appear/disappear (avoids bounce / double-adjust).
+  useEffect(() => {
+    const el = document.getElementById("scroll-main");
+    if (!el) return;
+    const prev = el.style.overflowAnchor;
+    el.style.overflowAnchor = "none";
+    return () => { el.style.overflowAnchor = prev; };
+  }, []);
+
+  // Keep the next-coming match anchored visually when past matches are revealed/hidden.
+  useLayoutEffect(() => {
+    if (view !== "coming") { prevShowPastRef.current = showPast; return; }
+    const el = document.getElementById("scroll-main");
+    if (!el) return;
+    const was = prevShowPastRef.current;
+    if (was === showPast) return;
+    if (showPast) {
+      // Past was just inserted above next-coming — shift scroll down by its height
+      // so the next-coming match stays in the same visual position.
+      const h = pastSectionRef.current?.offsetHeight ?? 0;
+      el.scrollTop += h;
+    } else {
+      // Past was just removed — jump to top, which is now the next-coming match.
+      el.scrollTop = 0;
+    }
+    prevShowPastRef.current = showPast;
+  }, [showPast, view]);
+
+  // Reset past expansion when switching tabs or groups.
+  useEffect(() => { if (view !== "coming") setShowPast(false); }, [view]);
 
   const loadMatches = useCallback((groupId: string) => {
     const path = groupId !== "none" ? `/api/matches?group_id=${groupId}` : "/api/matches";
@@ -139,6 +174,10 @@ export default function FixturesPage() {
 
   const comingByDay = Object.entries(groupByDay(comingMatches));
   const pastByDay = Object.entries(groupByDay(pastMatches));
+  // When expanded inline above the coming list, past matches read top-to-bottom oldest → newest,
+  // so the newest finished match sits right above the next-coming one.
+  const pastByDayChrono = [...pastByDay].reverse();
+  const pastCount = pastMatches.length;
   const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup).sort((a, b) => a.match_date - b.match_date);
   const standings = computeStandings(groupMatches);
 
@@ -203,6 +242,48 @@ export default function FixturesPage() {
               To bet {unbetCount > 0 && <span className={`ml-1 ${onlyUnbet ? "opacity-70" : "text-accent"}`}>{unbetCount}</span>}
             </button>
           </div>
+
+          {/* Past matches — hidden by default, expand above next-coming */}
+          {showPast && pastByDayChrono.length > 0 && (
+            <div ref={pastSectionRef} className="space-y-6 lg:space-y-8">
+              {pastByDayChrono.map(([day, dayMatches]) => (
+                <section key={day}>
+                  <div className="mb-2 px-1 lg:mb-4 lg:flex lg:items-center lg:gap-4">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted lg:text-sm">{day}</p>
+                    <div className="hidden lg:block flex-1 h-px bg-border" />
+                    <p className="hidden lg:block text-xs text-muted">{(dayMatches as Match[]).length} match{(dayMatches as Match[]).length === 1 ? "" : "es"}</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {(dayMatches as Match[]).map(match => (
+                      <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                        onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          {/* Toggle — sits right above the next coming game */}
+          {pastCount > 0 && (
+            <button
+              onClick={() => setShowPast(s => !s)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-surface/70 px-4 py-2.5 text-xs font-semibold text-muted transition active:border-accent active:text-accent"
+            >
+              {showPast ? (
+                <>
+                  <span aria-hidden>▾</span>
+                  <span>Hide past games</span>
+                </>
+              ) : (
+                <>
+                  <span aria-hidden>▴</span>
+                  <span>Show {pastCount} past game{pastCount === 1 ? "" : "s"}</span>
+                </>
+              )}
+            </button>
+          )}
+
           {comingByDay.length === 0 && (
             <p className="py-12 text-center text-sm text-muted">
               {onlyUnbet ? "All caught up — you've bet on every upcoming match 🎯" : "No upcoming matches"}
@@ -309,6 +390,19 @@ export default function FixturesPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* Floating "hide past" — visible whenever past is expanded in the coming view */}
+      {view === "coming" && showPast && (
+        <button
+          onClick={() => setShowPast(false)}
+          style={{ top: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+          className="fixed right-3 z-40 flex items-center gap-1.5 rounded-full border border-border bg-surface/95 backdrop-blur px-3 py-1.5 text-[11px] font-semibold text-muted shadow-lg transition active:scale-95 active:border-accent active:text-accent lg:right-6 lg:text-xs"
+          aria-label="Hide past games"
+        >
+          <span aria-hidden>▾</span>
+          <span>Hide past</span>
+        </button>
       )}
 
       {/* Scroll to top */}
