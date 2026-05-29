@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
-import { GOLDEN_BOOT_PLAYERS } from "@/lib/golden-boot-players";
+import { GOLDEN_BOOT_PLAYERS, oddsToProbability } from "@/lib/golden-boot-players";
 import { WC_TEAMS } from "@/lib/wc-teams";
 import { AdminResolveSpecial } from "@/components/admin-resolve-special";
 
@@ -236,7 +236,7 @@ export default function SpecialPage() {
                           <Flag code={p.code} />
                           <span className="flex-1 truncate">{p.name}</span>
                           <span className={`shrink-0 text-xs ${active ? "text-[#0f0f23]/70" : "text-muted"}`}>
-                            {p.odds}
+                            {oddsToProbability(p.odds)}
                           </span>
                         </button>
                       );

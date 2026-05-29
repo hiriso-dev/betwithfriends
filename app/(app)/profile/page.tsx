@@ -224,9 +224,9 @@ export default function ProfilePage() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Recommended</p>
-              <h2 className="mt-1 text-lg font-black">Install the app</h2>
+              <h2 className="mt-1 text-lg font-black">Add BetWithFriends to your Home Screen</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Install BetWithFriends so users can open it faster and get notification support more reliably.
+                Open BetWithFriends faster, like an app, and get more reliable notifications during the World Cup.
               </p>
             </div>
           </div>

@@ -9,6 +9,16 @@ export type GoldenBootPlayer = {
   odds: string; // american odds
 };
 
+// Convert American odds (e.g. "+600", "-150") to an implied win-probability
+// label like "14%". Returns "<1%" for very long shots that round to zero.
+export function oddsToProbability(odds: string): string {
+  const n = parseInt(odds.replace(/[^0-9+-]/g, ""), 10);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  const prob = n > 0 ? 100 / (n + 100) : -n / (-n + 100);
+  const pct = Math.round(prob * 100);
+  return pct < 1 ? "<1%" : `${pct}%`;
+}
+
 export const GOLDEN_BOOT_PLAYERS: GoldenBootPlayer[] = [
   { rank: 1, name: "Kylian Mbappé", country: "France", code: "FRA", odds: "+600" },
   { rank: 2, name: "Harry Kane", country: "England", code: "ENG", odds: "+700" },
