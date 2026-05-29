@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PullToRefresh } from "@/components/pull-to-refresh";
-import { useInstallable } from "@/components/install-prompt";
+import { useInstallable, useInstallBadgeAck } from "@/components/install-prompt";
 
 const nav = [
   { href: "/home",     label: "Home" },
@@ -72,7 +72,8 @@ function SidebarIcon({ label, size = 20, className = "" }: { label: string; size
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { mode: installMode, isStandalone } = useInstallable();
-  const showInstallBadge = !isStandalone && installMode !== null;
+  const [installBadgeAck] = useInstallBadgeAck();
+  const showInstallBadge = !isStandalone && installMode !== null && !installBadgeAck;
 
   function isActive(href: string) {
     if (href === "/fixtures") {

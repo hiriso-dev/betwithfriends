@@ -15,6 +15,8 @@ type Mode =
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 const INSTALL_SHEET_SEEN_KEY = "bwf-install-sheet-seen";
+const INSTALL_BADGE_ACK_KEY = "bwf-install-badge-ack";
+const INSTALL_BADGE_ACK_EVENT = "bwf-install-badge-ack-change";
 
 function detectMode(): Mode | null {
   const ua = navigator.userAgent;
@@ -287,6 +289,35 @@ export function useInstallable(): InstallInfo {
   }
 
   return { mode, isStandalone, triggerInstall };
+}
+
+// ---- Install badge acknowledgment (shared across layout + profile) ----
+
+function readBadgeAck(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(INSTALL_BADGE_ACK_KEY) === "1";
+}
+
+export function useInstallBadgeAck(): [boolean, (value: boolean) => void] {
+  const [acknowledged, setAcknowledgedState] = useState(readBadgeAck);
+
+  useEffect(() => {
+    const sync = () => setAcknowledgedState(readBadgeAck());
+    window.addEventListener(INSTALL_BADGE_ACK_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(INSTALL_BADGE_ACK_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  function setAcknowledged(value: boolean) {
+    localStorage.setItem(INSTALL_BADGE_ACK_KEY, value ? "1" : "0");
+    setAcknowledgedState(value);
+    window.dispatchEvent(new Event(INSTALL_BADGE_ACK_EVENT));
+  }
+
+  return [acknowledged, setAcknowledged];
 }
 
 function BenefitLine({ text }: { text: string }) {

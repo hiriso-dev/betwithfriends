@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { useInstallable } from "@/components/install-prompt";
+import { useInstallable, useInstallBadgeAck } from "@/components/install-prompt";
 
 type UserProfile = {
   email: string;
@@ -26,6 +26,7 @@ export default function ProfilePage() {
   const [testing, setTesting] = useState(false);
   const [testMessage, setTestMessage] = useState<string | null>(null);
   const { mode: installMode, isStandalone, triggerInstall } = useInstallable();
+  const [installBadgeAck, setInstallBadgeAck] = useInstallBadgeAck();
 
   useEffect(() => {
     let cancelled = false;
@@ -276,6 +277,18 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+
+          <label className="mt-4 flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={installBadgeAck}
+              onChange={(e) => setInstallBadgeAck(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+            />
+            <span className="text-sm text-muted">
+              Don&apos;t remind me — hide the badge on the Profile icon.
+            </span>
+          </label>
         </div>
       )}
 
