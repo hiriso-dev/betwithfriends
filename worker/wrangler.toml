@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 APP_URL = "http://localhost:3000"
 # Sender address; must be on a domain verified in Resend.
-EMAIL_FROM = "noreply@yourdomain.com"
+EMAIL_FROM = "noreply@betwithfriends.fun"
 # Set the API key as a secret: `cd worker && npx wrangler secret put RESEND_API_KEY`
 # For local dev, add RESEND_API_KEY to worker/.dev.vars (gitignored).
 

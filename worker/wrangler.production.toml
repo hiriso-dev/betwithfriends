@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 APP_URL = "https://betwithfriends.jerome-ladeveze.workers.dev"
 # Sender address; must be on a domain verified in Resend.
-EMAIL_FROM = "noreply@yourdomain.com"
+EMAIL_FROM = "noreply@betwithfriends.fun"
 # RESEND_API_KEY is a secret: `npx wrangler secret put RESEND_API_KEY --config worker/wrangler.production.toml`
 
 [[d1_databases]]
