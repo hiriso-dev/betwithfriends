@@ -128,29 +128,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        {/* MOBILE BOTTOM NAV — hidden on desktop */}
+        {/* MOBILE BOTTOM NAV — floating pill, hidden on desktop */}
         <nav
-          className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface/95 backdrop-blur-md lg:hidden"
-          style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
+          className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 lg:hidden pointer-events-none"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
         >
-          <div className="mx-auto flex max-w-lg">
+          <div className="pointer-events-auto flex w-full max-w-md items-center gap-1 rounded-[26px] border border-white/10 bg-surface/80 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             {nav.map((item) => {
               const active = isActive(item.href);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="flex flex-1 flex-col items-center gap-1 py-2 transition active:scale-90"
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-[20px] py-2.5 transition active:scale-90 ${
+                    active ? "bg-accent/15" : ""
+                  }`}
                 >
-                  <span className={`relative transition ${active ? "text-accent scale-110" : "text-muted"}`}>
-                    <SidebarIcon label={item.label} size={24} />
+                  <span className={`relative transition ${active ? "text-accent" : "text-muted"}`}>
+                    <SidebarIcon label={item.label} size={23} />
                     {item.href === "/profile" && showInstallBadge && (
                       <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-black text-[#0f0f23] ring-2 ring-surface">
                         1
                       </span>
                     )}
                   </span>
-                  <span className={`text-[10px] font-medium tracking-wide ${active ? "text-accent" : "text-muted"}`}>
+                  <span className={`text-[10px] font-semibold tracking-wide ${active ? "text-accent" : "text-muted"}`}>
                     {item.label}
                   </span>
                 </Link>
