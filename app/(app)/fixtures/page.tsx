@@ -139,7 +139,7 @@ export default function FixturesPage() {
 
   const comingByDay = Object.entries(groupByDay(comingMatches));
   const pastByDay = Object.entries(groupByDay(pastMatches));
-  const groupMatches = allMatches.filter(m => m.group_name === selectedWcGroup).sort((a, b) => a.match_date - b.match_date);
+  const groupMatches = allMatches.filter(m => m.group_name === `GROUP_${selectedWcGroup}`).sort((a, b) => a.match_date - b.match_date);
   const standings = computeStandings(groupMatches);
 
   const groupBettingId = bettingGroupId !== "none" ? bettingGroupId : undefined;

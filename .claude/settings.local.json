@@ -12,10 +12,20 @@
       "Bash(cd /Users/jerome/Documents/betwithfriends && npm run worker:dev > /tmp/worker-dev.log 2>&1 & *)",
       "Read(//tmp/**)",
       "Bash(node -e \"require\\('jimp'\\)\")",
-      "Bash(identify /Users/jerome/Documents/betwithfriends/public/favicon_bwf.png)"
+      "Bash(identify /Users/jerome/Documents/betwithfriends/public/favicon_bwf.png)",
+      "Bash(grep -E \"\\\\.\\(tsx?|ts\\)$\")",
+      "Bash(sed -n '/^function BetSheet/,/^}/p' \"./app/\\(app\\)/home/page.tsx\" | head -150)",
+      "Bash(awk '/^function BetSheet/,/^}$/{if\\(/^}$/\\)exit; print}' \"./app/\\(app\\)/home/page.tsx\")",
+      "Bash(sleep 3 && npm run dev > /tmp/frontend.log 2>&1 &)",
+      "Bash(curl -s http://localhost:8787/api/matches)",
+      "Bash(pkill -f \"wrangler dev\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(wrangler execute *)"
     ],
     "additionalDirectories": [
-      "/Users/jerome/Documents/betwithfriends/app/(app)/teams"
+      "/Users/jerome/Documents/betwithfriends/app/(app)/teams",
+      "/Users/jerome/Documents/betwithfriends/app/(app)/home",
+      "/tmp"
     ]
   }
 }

@@ -84,7 +84,7 @@ export default function HomePage() {
     .slice(0, 3);
 
   // Countdown: next bet that closes (soonest lock = match_date - 5min, or WC_START for specials)
-  const BET_LOCK_MS = 5 * 60 * 1000;
+  const BET_LOCK_MS = 0;
   const specialsDeadline = !tournamentStarted && specialBets.length < SPECIAL_BET_TYPES.length ? WC_START : Infinity;
   const nextMatchLock = upcoming.length > 0 ? upcoming[0].match_date * 1000 - BET_LOCK_MS : Infinity;
   const nextDeadlineMs = Math.min(specialsDeadline, nextMatchLock);
@@ -391,7 +391,7 @@ function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
     }, 10000);
     return () => clearInterval(t);
   }, [match.match_date]);
-  const locked = minutesLeft <= 5 || match.status !== "scheduled";
+  const locked = minutesLeft <= 0 || match.status !== "scheduled";
 
   const alreadyDoubleUp = match.my_bet?.double_up === 1;
   const doubleUpsRemaining = 2 - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);

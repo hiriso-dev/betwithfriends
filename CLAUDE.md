@@ -45,7 +45,7 @@ Worker vars (set in `wrangler.toml` / `wrangler.production.toml`):
 
 All scores are based on **regular time only** (90 min) — extra time and penalties are ignored.
 
-Bet locks **5 minutes before kickoff** (`BET_LOCK_MINUTES = 5`).
+Bet locks **at kickoff** (`BET_LOCK_MINUTES = 0`).
 
 Points per bet (see `worker/src/services/scoring.ts`):
 
