@@ -16,6 +16,8 @@ export function PullToRefresh({ scrollId }: { scrollId: string }) {
     if (!el) return;
 
     function onTouchStart(e: TouchEvent) {
+      const target = e.target as Element | null;
+      if (target?.closest("[data-pull-ignore]")) return;
       if (el!.scrollTop <= 0) {
         startY.current = e.touches[0].clientY;
         pulling.current = true;

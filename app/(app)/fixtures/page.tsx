@@ -410,8 +410,8 @@ function BetSheet({
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto
+      <div data-pull-ignore className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div data-pull-ignore className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto
                       lg:inset-auto lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:-translate-y-1/2
                       lg:w-[28rem] lg:max-w-[90vw] lg:rounded-3xl lg:border lg:border-border">
         <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto lg:hidden" />

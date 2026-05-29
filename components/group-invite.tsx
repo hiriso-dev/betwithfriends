@@ -41,8 +41,8 @@ export default function GroupInvite({
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl pb-safe">
+      <div data-pull-ignore className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div data-pull-ignore className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl pb-safe">
         <div className="px-6 pt-3 pb-6">
           {/* Handle */}
           <div className="mb-5 h-1 w-12 rounded-full bg-border mx-auto" />

@@ -215,8 +215,8 @@ export default function SpecialPage() {
       {/* Edit sheet */}
       {editingType && (
         <>
-          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={() => setEditingType(null)} />
-          <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl max-h-[75vh] flex flex-col">
+          <div data-pull-ignore className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={() => setEditingType(null)} />
+          <div data-pull-ignore className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl max-h-[75vh] flex flex-col">
             {/* Scrollable picker */}
             <div className="overflow-y-auto flex-1 px-6 pt-6 pb-2">
               <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
