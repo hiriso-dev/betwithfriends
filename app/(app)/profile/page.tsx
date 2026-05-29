@@ -226,7 +226,7 @@ export default function ProfilePage() {
               <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Recommended</p>
               <h2 className="mt-1 text-lg font-black">Add BetWithFriends to your Home Screen</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Open BetWithFriends faster, like an app, and get more reliable notifications during the World Cup.
+                Add BetWithFriends to your Home Screen for faster access, game reminders, and points notifications after each match.
               </p>
             </div>
           </div>
