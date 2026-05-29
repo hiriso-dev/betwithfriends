@@ -5,7 +5,7 @@ type ErrFn = (msg: string, status?: number, origin?: string) => Response;
 
 const WC_2026_START = new Date("2026-06-11T21:00:00Z").getTime();
 
-const POINTS_MAP: Record<string, number> = {
+export const POINTS_MAP: Record<string, number> = {
   champion: 50,
   runner_up: 20,
   third_place: 15,

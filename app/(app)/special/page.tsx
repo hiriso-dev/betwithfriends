@@ -3,6 +3,10 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
+import { GOLDEN_BOOT_PLAYERS } from "@/lib/golden-boot-players";
+import { AdminResolveSpecial } from "@/components/admin-resolve-special";
+
+const ADMIN_EMAIL = "jerome.ladeveze@gmail.com";
 
 const SPECIAL_BET_TYPES = [
   { type: "champion", label: "🏆 World Champion", points: 50, description: "Which team will lift the trophy?" },
@@ -53,13 +57,17 @@ export default function SpecialPage() {
   const [loading, setLoading] = useState(true);
   const [editingType, setEditingType] = useState<string | null>(null);
   const [selectedValue, setSelectedValue] = useState("");
+  const [playerSearch, setPlayerSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [tournamentStarted, setTournamentStarted] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     // WC 2026 starts June 11, 2026
     const wcStart = new Date("2026-06-11T21:00:00Z").getTime();
     setTournamentStarted(Date.now() >= wcStart);
+
+    apiFetch<{ email: string }>("/api/auth/me").then((r) => setUserEmail(r.email)).catch(() => {});
 
     apiFetch<Group[]>("/api/groups")
       .then((g) => {
@@ -107,8 +115,16 @@ export default function SpecialPage() {
 
   const myBet = (type: string) => bets.find((b) => b.bet_type === type);
 
+  function openEditor(type: string, value: string) {
+    setEditingType(type);
+    setSelectedValue(value);
+    setPlayerSearch("");
+  }
+
   return (
     <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4">
+      {userEmail === ADMIN_EMAIL && <AdminResolveSpecial />}
+
       <div className="mb-4">
         <h1 className="text-xl font-bold">Special Bets</h1>
         <p className="text-sm text-muted mt-0.5">
@@ -147,11 +163,15 @@ export default function SpecialPage() {
         {SPECIAL_BET_TYPES.map((spec) => {
           const existing = myBet(spec.type);
           const locked = tournamentStarted || !!existing?.points_earned;
+          const openable = !locked && !!selectedGroup;
 
           return (
             <div
               key={spec.type}
-              className="rounded-2xl bg-surface border border-border p-4"
+              onClick={openable ? () => openEditor(spec.type, existing?.bet_value ?? "") : undefined}
+              className={`rounded-2xl bg-surface border border-border p-4 ${
+                openable ? "cursor-pointer transition active:border-accent" : ""
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
@@ -174,11 +194,11 @@ export default function SpecialPage() {
                     </p>
                   )}
                 </div>
-                {!locked && selectedGroup && (
+                {openable && (
                   <button
-                    onClick={() => {
-                      setEditingType(spec.type);
-                      setSelectedValue(existing?.bet_value ?? "");
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditor(spec.type, existing?.bet_value ?? "");
                     }}
                     className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-muted transition active:border-accent active:text-accent"
                   >
@@ -197,27 +217,87 @@ export default function SpecialPage() {
         <>
           <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={() => setEditingType(null)} />
           <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface shadow-2xl max-h-[75vh] flex flex-col">
-            {/* Scrollable team list */}
+            {/* Scrollable picker */}
             <div className="overflow-y-auto flex-1 px-6 pt-6 pb-2">
               <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto" />
               <h3 className="mt-3 mb-4 text-lg font-bold">
                 {SPECIAL_BET_TYPES.find((s) => s.type === editingType)?.label}
               </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {WC_TEAMS.map(({ name, code: tCode }) => (
-                  <button
-                    key={name}
-                    onClick={() => setSelectedValue(name)}
-                    className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                      selectedValue === name
-                        ? "bg-accent text-[#0f0f23]"
-                        : "bg-surface-hover text-foreground border border-border active:border-accent"
-                    }`}
-                  >
-                    <Flag code={tCode} /> {name}
-                  </button>
-                ))}
-              </div>
+
+              {editingType === "top_scorer" ? (
+                <>
+                  <div className="sticky top-0 z-10 -mx-6 -mt-2 bg-surface px-6 pb-3 pt-2">
+                    <input
+                      type="text"
+                      value={playerSearch}
+                      onChange={(e) => setPlayerSearch(e.target.value)}
+                      placeholder="Search player or country…"
+                      className="w-full rounded-xl border border-border bg-surface-hover px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    {GOLDEN_BOOT_PLAYERS.filter((p) => {
+                      const q = playerSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        p.name.toLowerCase().includes(q) ||
+                        p.country.toLowerCase().includes(q)
+                      );
+                    }).map((p) => {
+                      const active = selectedValue === p.name;
+                      return (
+                        <button
+                          key={p.rank}
+                          onClick={() => setSelectedValue(p.name)}
+                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                            active
+                              ? "bg-accent text-[#0f0f23]"
+                              : "bg-surface-hover text-foreground border border-border active:border-accent"
+                          }`}
+                        >
+                          <span className={`w-6 shrink-0 text-xs font-bold ${active ? "text-[#0f0f23]/70" : "text-muted"}`}>
+                            {p.rank}
+                          </span>
+                          <Flag code={p.code} />
+                          <span className="flex-1 truncate">{p.name}</span>
+                          <span className={`shrink-0 text-xs ${active ? "text-[#0f0f23]/70" : "text-muted"}`}>
+                            {p.odds}
+                          </span>
+                        </button>
+                      );
+                    })}
+
+                    {/* Other — none of the 100 players above */}
+                    <button
+                      onClick={() => setSelectedValue("Other")}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                        selectedValue === "Other"
+                          ? "bg-accent text-[#0f0f23]"
+                          : "bg-surface-hover text-foreground border border-border active:border-accent"
+                      }`}
+                    >
+                      <span className={`w-6 shrink-0 text-center ${selectedValue === "Other" ? "text-[#0f0f23]/70" : "text-muted"}`}>—</span>
+                      <span className="flex-1">Other (none of the above)</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {WC_TEAMS.map(({ name, code: tCode }) => (
+                    <button
+                      key={name}
+                      onClick={() => setSelectedValue(name)}
+                      className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                        selectedValue === name
+                          ? "bg-accent text-[#0f0f23]"
+                          : "bg-surface-hover text-foreground border border-border active:border-accent"
+                      }`}
+                    >
+                      <Flag code={tCode} /> {name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {/* Sticky confirm button — always visible, never buried under scroll or nav */}
             <div className="px-6 py-4 pb-safe border-t border-border bg-surface">
