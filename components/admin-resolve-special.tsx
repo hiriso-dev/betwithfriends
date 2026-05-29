@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { GOLDEN_BOOT_PLAYERS } from "@/lib/golden-boot-players";
+import { WC_TEAMS } from "@/lib/wc-teams";
 
 const BET_TYPES = [
   { type: "champion", label: "🏆 World Champion", points: 50 },
@@ -69,29 +70,36 @@ export function AdminResolveSpecial() {
             difference. Leave a field blank to skip it.
           </p>
 
-          <datalist id="wc-players">
-            {GOLDEN_BOOT_PLAYERS.map((p) => (
-              <option key={p.rank} value={p.name} />
-            ))}
-          </datalist>
-
           <div className="space-y-2">
-            {BET_TYPES.map((bt) => (
-              <div key={bt.type} className="flex items-center gap-2">
-                <label className="w-32 shrink-0 text-xs text-foreground">
-                  {bt.label}
-                  <span className="ml-1 text-muted">+{bt.points}</span>
-                </label>
-                <input
-                  type="text"
-                  list={bt.type === "top_scorer" ? "wc-players" : undefined}
-                  value={values[bt.type] ?? ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [bt.type]: e.target.value }))}
-                  placeholder={bt.type === "top_scorer" ? "Player name" : "Team name"}
-                  className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
-                />
-              </div>
-            ))}
+            {BET_TYPES.map((bt) => {
+              const isPlayer = bt.type === "top_scorer";
+              return (
+                <div key={bt.type} className="flex items-center gap-2">
+                  <label className="w-32 shrink-0 text-xs text-foreground">
+                    {bt.label}
+                    <span className="ml-1 text-muted">+{bt.points}</span>
+                  </label>
+                  <select
+                    value={values[bt.type] ?? ""}
+                    onChange={(e) => setValues((v) => ({ ...v, [bt.type]: e.target.value }))}
+                    className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
+                  >
+                    <option value="">— {isPlayer ? "Select player" : "Select team"} —</option>
+                    {isPlayer
+                      ? GOLDEN_BOOT_PLAYERS.map((p) => (
+                          <option key={p.rank} value={p.name}>
+                            {p.name} ({p.country})
+                          </option>
+                        ))
+                      : WC_TEAMS.map((t) => (
+                          <option key={t.code} value={t.name}>
+                            {t.name}
+                          </option>
+                        ))}
+                  </select>
+                </div>
+              );
+            })}
           </div>
 
           <button
