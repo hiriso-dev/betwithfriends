@@ -67,6 +67,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
 
           {/* Scoring */}
           <Section title="Scoring">
+            <p className="mb-3 rounded-xl border border-warning/20 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-muted">
+              Use the score at the end of <strong className="text-foreground">regular time only</strong>.
+              For knockout matches, <strong className="text-foreground">extra time and penalties do not count</strong>.
+            </p>
             <div className="space-y-2">
               <Row label="Correct result (win/draw)" value="+10 pts" color="text-success" />
               <Row label="Exact score bonus" value="+5 pts" color="text-success" />

@@ -477,6 +477,11 @@ function BetSheet({
           <ScoreInput label={match.away_team} value={away} onChange={setAway} disabled={locked} />
         </div>
 
+        <div className="mb-4 rounded-xl border border-warning/20 bg-warning/10 px-3 py-2 text-center text-[11px] leading-relaxed text-muted">
+          Score is taken at the end of <strong className="text-foreground">regular time only</strong>.
+          <strong className="text-foreground"> Extra time and penalties do not count</strong>.
+        </div>
+
         {/* Confidence selector */}
         <div className="mb-4">
           <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence <span className="normal-case font-normal opacity-70">— optional</span></p>
