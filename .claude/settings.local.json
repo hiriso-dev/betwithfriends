@@ -20,7 +20,12 @@
       "Bash(curl -s http://localhost:8787/api/matches)",
       "Bash(pkill -f \"wrangler dev\")",
       "Bash(pkill -f \"next dev\")",
-      "Bash(wrangler execute *)"
+      "Bash(wrangler execute *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(echo \"===EXIT $?===\")",
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"EXIT=$?\")"
     ],
     "additionalDirectories": [
       "/Users/jerome/Documents/betwithfriends/app/(app)/teams",

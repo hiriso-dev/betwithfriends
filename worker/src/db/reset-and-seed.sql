@@ -65,6 +65,7 @@ CREATE TABLE matches (
   group_name TEXT,
   stadium TEXT,
   venue_city TEXT,
+  reminders_done INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER DEFAULT (unixepoch())
 );
 

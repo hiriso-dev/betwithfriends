@@ -15,4 +15,6 @@ database_name = "betwithfriends"
 database_id = "1a9b9a7f-e5dc-4fb4-90f7-f177d332f238"
 
 [triggers]
+# Every minute: pre-game bet reminders (DB-only) + score sync (only fires an API
+# call when a match is in its 105 min–6h post-kickoff scoring window).
 crons = ["* * * * *"]

@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS matches (
   group_name TEXT,
   stadium TEXT,
   venue_city TEXT,
+  -- Set to 1 by the pre-game reminder cron once nobody is left to remind for
+  -- this match (everyone who could be notified has bet or already been sent),
+  -- so the every-minute pass can skip it instead of re-querying each tick.
+  reminders_done INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER DEFAULT (unixepoch())
 );
 

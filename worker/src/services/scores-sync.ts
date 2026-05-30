@@ -5,6 +5,42 @@ import { sendMatchResultNotifications } from "./push-service";
 const FOOTBALL_DATA_URL = "https://api.football-data.org/v4";
 const SQLITE_MAX_VARIABLES = 500;
 
+// Don't poll the API until regular time could plausibly be over. A match can't
+// reach the 90' final whistle before 45' + 15' half-time + 45' = 105' after
+// kickoff, so polling earlier only spends API calls (free tier = 10/min) on a
+// result that isn't final yet — the game is still on. Starting at 105' means the
+// first poll after the whistle catches the result within one 5-min tick.
+const SCORE_POLL_START_AFTER_KICKOFF_SECONDS = 105 * 60; // 1h45
+
+// Stop polling 6h after kickoff. The 90' result is what we score on and it's in
+// long before then; this cap just stops a match the API never marks FINISHED
+// (abandoned game, API glitch) from making us poll forever.
+const SCORE_POLL_STOP_AFTER_KICKOFF_SECONDS = 6 * 60 * 60; // 6h
+
+/**
+ * True when at least one match is in its score-polling window: kicked off between
+ * 6h and 105 min ago, and not yet finished in our DB. Gates the football-data.org
+ * poll so the API is only hit once regular time is plausibly over — never during
+ * play, and never when nothing is happening. A match that goes to extra time /
+ * penalties stays selected (it isn't 'finished' until the API says so), so we
+ * keep polling until the API reports FINISHED — at which point scoring still uses
+ * the 90' regularTime score, not the ET/pens score.
+ */
+export async function hasMatchNeedingScoreSync(env: Env): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM matches
+     WHERE status IN ('scheduled', 'live')
+       AND match_date <= ?
+       AND match_date >= ?
+     LIMIT 1`
+  ).bind(
+    now - SCORE_POLL_START_AFTER_KICKOFF_SECONDS,
+    now - SCORE_POLL_STOP_AFTER_KICKOFF_SECONDS
+  ).first();
+  return row !== null;
+}
+
 type FDMatch = {
   id: number;
   utcDate: string;

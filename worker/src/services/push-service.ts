@@ -424,27 +424,54 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
 }
 
 export async function sendPreGameReminders(env: Env): Promise<void> {
-  // Find matches starting in about an hour.
-  const soon = Math.floor(Date.now() / 1000) + 60 * 60;
-  const windowStart = soon - 10 * 60;
-  const windowEnd = soon + 10 * 60;
+  const now = Math.floor(Date.now() / 1000);
 
+  // Every scheduled match kicking off within the next hour (kickoff still in the
+  // future — betting locks at kickoff, so there's no point reminding after it).
+  // This is a rolling 0–60 min window rather than a narrow slice, so a single
+  // missed cron tick can't permanently skip a match: any tick in the hour before
+  // kickoff is a chance to send, and notification_deliveries dedups to one send.
+  // `reminders_done = 1` matches are skipped (see below) so settled matches don't
+  // get re-queried every minute.
   const matches = await env.DB.prepare(
-    "SELECT id, home_team, away_team FROM matches WHERE status = 'scheduled' AND match_date BETWEEN ? AND ?"
-  ).bind(windowStart, windowEnd).all<{ id: string; home_team: string; away_team: string }>();
+    `SELECT id, home_team, away_team
+     FROM matches
+     WHERE status = 'scheduled'
+       AND reminders_done = 0
+       AND match_date > ?
+       AND match_date <= ?`
+  ).bind(now, now + 60 * 60).all<{ id: string; home_team: string; away_team: string }>();
 
   for (const match of matches.results) {
-    // Find group members who haven't bet on this match
+    // Recipients = group members who, for at least one of their groups:
+    //   1. haven't placed a bet on this match,
+    //   2. have a push subscription (subscribed to notifications), and
+    //   3. have the pre-game reminder pref on (default on when no row exists), and
+    //   4. haven't already been sent this match's pre-game reminder.
+    // Excluding the already-delivered (4) means an empty result == "nobody left
+    // to remind", which lets us mark the match done and stop re-checking it.
     const rows = await env.DB.prepare(`
       SELECT DISTINCT gm.user_id, ps.subscription_json
       FROM group_members gm
-      JOIN notification_prefs np ON np.user_id = gm.user_id AND np.remind_before_game = 1
       JOIN push_subscriptions ps ON ps.user_id = gm.user_id
-      WHERE NOT EXISTS (
-        SELECT 1 FROM bets b
-        WHERE b.user_id = gm.user_id AND b.match_id = ? AND b.group_id = gm.group_id
-      )
-    `).bind(match.id).all<{ user_id: string; subscription_json: string }>();
+      LEFT JOIN notification_prefs np ON np.user_id = gm.user_id
+      WHERE COALESCE(np.remind_before_game, 1) = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM bets b
+          WHERE b.user_id = gm.user_id AND b.match_id = ? AND b.group_id = gm.group_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM notification_deliveries d
+          WHERE d.user_id = gm.user_id AND d.match_id = ? AND d.delivery_type = 'pre_game'
+        )
+    `).bind(match.id, match.id).all<{ user_id: string; subscription_json: string }>();
+
+    if (rows.results.length === 0) {
+      // Nobody left to remind for this match — stop re-querying it every minute.
+      await env.DB.prepare("UPDATE matches SET reminders_done = 1 WHERE id = ?")
+        .bind(match.id).run();
+      continue;
+    }
 
     for (const row of rows.results) {
       const reserved = await reserveDelivery(env, row.user_id, match.id, "pre_game");

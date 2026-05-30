@@ -7,7 +7,7 @@ import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { handleStandings } from "./handlers/standings";
 import { handleAdmin } from "./handlers/admin";
-import { syncScores, syncScorers } from "./services/scores-sync";
+import { syncScores, syncScorers, hasMatchNeedingScoreSync } from "./services/scores-sync";
 import { processMatchResult } from "./services/scoring";
 import {
   sendPreGameReminders,
@@ -178,9 +178,20 @@ const worker = {
   },
 
   async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
-    await syncScores(env);
-    await syncScorers(env);
+    // Runs every minute (see wrangler.toml).
+    //
+    // Pre-game reminders: DB-only, no API call — cheap to run every tick, and
+    // doing so means a reminder is never missed in the hour before kickoff.
     await sendPreGameReminders(env);
+
+    // Score sync: only poll football-data.org when a match is in its scoring
+    // window (kicked off 105 min–6h ago, not yet finished). One bulk call covers
+    // every match, so even at 1×/min we stay far under the free-tier 10 calls/min
+    // (syncScorers self-throttles to every 30 min). Outside that window: 0 calls.
+    if (await hasMatchNeedingScoreSync(env)) {
+      await syncScores(env);
+      await syncScorers(env);
+    }
   },
 };
 
