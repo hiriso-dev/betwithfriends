@@ -249,7 +249,11 @@ export default function ProfilePage() {
       )}
 
       {!isStandalone && installMode && (
-        <div className="mb-4 rounded-2xl border border-accent/40 bg-accent/10 p-4">
+        <div
+          className={`mb-4 rounded-2xl border p-4 ${
+            installBadgeAck ? "border-border bg-surface" : "border-accent/40 bg-accent/10"
+          }`}
+        >
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xl text-accent">
               📲
