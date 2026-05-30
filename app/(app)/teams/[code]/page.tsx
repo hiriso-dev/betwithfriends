@@ -10,6 +10,8 @@ type Match = {
   home_team_code: string; away_team_code: string;
   match_date: number;
   home_score: number | null; away_score: number | null;
+  final_home_score: number | null; final_away_score: number | null;
+  score_duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string; group_name: string | null;
   stadium: string | null; venue_city: string | null;

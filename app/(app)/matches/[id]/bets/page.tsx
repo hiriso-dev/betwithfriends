@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
+import { getMatchScoreDisplay } from "@/lib/match-score";
 
 type MatchInfo = {
   id: string;
@@ -13,6 +14,9 @@ type MatchInfo = {
   match_date: number;
   home_score: number | null;
   away_score: number | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
+  score_duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string;
   group_name: string | null;
@@ -59,7 +63,15 @@ function betResultLabel(
   return { label: "✗ Wrong", color: "text-danger" };
 }
 
-export default function MatchBetsPage() {
+function MatchBetsFallback() {
+  return (
+    <div className="mx-auto max-w-lg px-4 pt-4 pb-8 lg:max-w-2xl lg:px-8 lg:pt-6 space-y-2">
+      {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-xl bg-surface animate-pulse" />)}
+    </div>
+  );
+}
+
+function MatchBetsContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,14 +92,18 @@ export default function MatchBetsPage() {
         const start = initialGroupId && grps.some(g => g.id === initialGroupId)
           ? initialGroupId
           : grps[0]?.id ?? null;
+        if (start) {
+          setLoading(true);
+          setError(null);
+        } else {
+          setLoading(false);
+        }
         setActiveGroupId(start);
       })
       .catch(() => router.push("/login"));
   }, [initialGroupId, router]);
 
   const loadBets = useCallback(async (groupId: string) => {
-    setLoading(true);
-    setError(null);
     try {
       const data = await apiFetch<{ match: MatchInfo; bets: BetRow[] }>(
         `/api/matches/${id}/bets?group_id=${groupId}`
@@ -104,8 +120,35 @@ export default function MatchBetsPage() {
 
   useEffect(() => {
     if (!activeGroupId) return;
-    loadBets(activeGroupId);
-  }, [activeGroupId, loadBets]);
+    let cancelled = false;
+
+    void apiFetch<{ match: MatchInfo; bets: BetRow[] }>(`/api/matches/${id}/bets?group_id=${activeGroupId}`)
+      .then((data) => {
+        if (cancelled) return;
+        setMatch(data.match);
+        setBets(data.bets);
+        setError(null);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setError(error instanceof Error ? error.message : "Failed to load bets");
+        setBets([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGroupId, id]);
+
+  function selectGroup(groupId: string) {
+    if (groupId === activeGroupId) return;
+    setLoading(true);
+    setError(null);
+    setActiveGroupId(groupId);
+  }
 
   // Auto-refresh while the match is live
   useEffect(() => {
@@ -151,6 +194,12 @@ export default function MatchBetsPage() {
       {/* Match header */}
       {match && (
         <div className="mb-4 rounded-2xl border border-border bg-surface p-4">
+          {(() => {
+            const scoreDisplay = getMatchScoreDisplay(match);
+            const primaryScore = scoreDisplay.primary ?? `${match.home_score ?? 0} – ${match.away_score ?? 0}`;
+
+            return (
+              <>
           <p className="text-[10px] uppercase tracking-widest text-muted mb-2">
             {match.group_name ? `Group ${match.group_name}` : match.stage}
           </p>
@@ -160,9 +209,10 @@ export default function MatchBetsPage() {
               <p className="text-sm font-bold leading-tight line-clamp-2 break-words">{match.home_team}</p>
             </div>
             <div className="flex flex-col items-center px-2">
-              <span className="text-3xl font-black tabular-nums">
-                {match.home_score ?? 0} – {match.away_score ?? 0}
-              </span>
+              <span className="text-3xl font-black tabular-nums">{primaryScore}</span>
+              {scoreDisplay.secondary && (
+                <span className="mt-1 text-[10px] font-medium text-muted">{scoreDisplay.secondary}</span>
+              )}
               <span className={`mt-1 text-[10px] font-semibold uppercase tracking-wider ${
                 match.status === "live" ? "text-success" : "text-muted"
               }`}>
@@ -174,6 +224,9 @@ export default function MatchBetsPage() {
               <p className="text-sm font-bold leading-tight line-clamp-2 break-words">{match.away_team}</p>
             </div>
           </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -183,7 +236,7 @@ export default function MatchBetsPage() {
           {groups.map(g => (
             <button
               key={g.id}
-              onClick={() => setActiveGroupId(g.id)}
+              onClick={() => selectGroup(g.id)}
               className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                 activeGroupId === g.id
                   ? "bg-accent text-[#0f0f23]"
@@ -286,5 +339,13 @@ export default function MatchBetsPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function MatchBetsPage() {
+  return (
+    <Suspense fallback={<MatchBetsFallback />}>
+      <MatchBetsContent />
+    </Suspense>
   );
 }

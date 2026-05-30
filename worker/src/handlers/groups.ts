@@ -102,6 +102,40 @@ export async function handleGroups(
     return json({ ...group, is_admin: (member as { is_admin: number }).is_admin === 1 }, 200, origin);
   }
 
+  // DELETE /api/groups/:id/members/:userId — admin removes a group member
+  const removeMemberMatch = pathname.match(/^\/api\/groups\/([^/]+)\/members\/([^/]+)$/);
+  if (removeMemberMatch && request.method === "DELETE") {
+    const groupId = removeMemberMatch[1];
+    const targetUserId = removeMemberMatch[2];
+
+    // Verify caller is an admin of this group
+    const caller = await env.DB.prepare(
+      "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?"
+    ).bind(groupId, auth.userId).first<{ is_admin: number }>();
+    if (!caller) return err("Not a member of this group", 403, origin);
+    if (!caller.is_admin) return err("Admin access required", 403, origin);
+
+    // Prevent self-removal
+    if (targetUserId === auth.userId) return err("Cannot remove yourself from the group", 400, origin);
+
+    // Verify target exists in group
+    const target = await env.DB.prepare(
+      "SELECT is_admin FROM group_members WHERE group_id = ? AND user_id = ?"
+    ).bind(groupId, targetUserId).first<{ is_admin: number }>();
+    if (!target) return err("Member not found in this group", 404, origin);
+
+    // Prevent removing another admin
+    if (target.is_admin) return err("Cannot remove another admin", 403, origin);
+
+    // Delete member's bets in this group, then remove the member
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM bets WHERE group_id = ? AND user_id = ?").bind(groupId, targetUserId),
+      env.DB.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").bind(groupId, targetUserId),
+    ]);
+
+    return json({ success: true }, 200, origin);
+  }
+
   // GET /api/groups/:id/rankings
   const rankMatch = pathname.match(/^\/api\/groups\/([^/]+)\/rankings$/);
   if (rankMatch && request.method === "GET") {

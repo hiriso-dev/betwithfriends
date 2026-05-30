@@ -28,7 +28,7 @@ export async function handleMatches(
     if (!member) return err("Not a member of this group", 403, origin);
 
     const match = await env.DB.prepare(
-      "SELECT id, home_team, away_team, home_team_code, away_team_code, match_date, home_score, away_score, status, stage, group_name FROM matches WHERE id = ?"
+      "SELECT id, home_team, away_team, home_team_code, away_team_code, match_date, home_score, away_score, final_home_score, final_away_score, score_duration, status, stage, group_name FROM matches WHERE id = ?"
     ).bind(matchId).first<{ status: string; match_date: number }>();
     if (!match) return err("Match not found", 404, origin);
 

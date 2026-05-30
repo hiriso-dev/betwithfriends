@@ -18,6 +18,8 @@ export type AuthContext = {
   email: string;
 };
 
+export type ScoreDuration = "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
+
 export type Match = {
   id: string;
   api_match_id: string;
@@ -28,6 +30,9 @@ export type Match = {
   match_date: number;
   home_score: number | null;
   away_score: number | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
+  score_duration: ScoreDuration;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string | null;
   group_name: string | null;
@@ -37,6 +42,7 @@ export type Match = {
   odds_updated_at: number | null;
   stadium: string | null;
   venue_city: string | null;
+  last_api_sync_at: number | null;
   updated_at: number;
   preview: number | null; // 1 = points shown but NOT added to leaderboard
 };

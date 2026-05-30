@@ -294,6 +294,22 @@ export default function ProfilePage() {
 
       <div
         className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden cursor-pointer active:bg-surface-hover transition"
+        onClick={() => router.push("/history")}
+      >
+        <div className="flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📋</span>
+            <div>
+              <p className="font-semibold text-sm">Bet History</p>
+              <p className="text-xs text-muted">All your predictions and results</p>
+            </div>
+          </div>
+          <span className="text-muted text-lg">›</span>
+        </div>
+      </div>
+
+      <div
+        className="mb-4 rounded-2xl bg-surface border border-border overflow-hidden cursor-pointer active:bg-surface-hover transition"
         onClick={() => router.push("/groups")}
       >
         <div className="flex items-center justify-between px-4 py-4">

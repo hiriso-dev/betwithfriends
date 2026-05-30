@@ -241,14 +241,39 @@ function hasAvailablePoints(summary: MatchBetSummary): boolean {
   return summary.totalPoints !== null;
 }
 
+function getFinalScoreSuffix(scoreDuration: Match["score_duration"]): string {
+  if (scoreDuration === "PENALTY_SHOOTOUT") return " pens";
+  if (scoreDuration === "EXTRA_TIME") return " aet";
+  return "";
+}
+
+function formatResolvedScore(
+  match: Pick<Match, "home_score" | "away_score"> & Partial<Pick<Match, "final_home_score" | "final_away_score" | "score_duration">>
+): string | null {
+  if (match.home_score === null || match.away_score === null) return null;
+
+  const primary = `${match.home_score}–${match.away_score}`;
+  const hasDistinctFinal =
+    match.final_home_score !== undefined &&
+    match.final_home_score !== null &&
+    match.final_away_score !== undefined &&
+    match.final_away_score !== null &&
+    (match.final_home_score !== match.home_score || match.final_away_score !== match.away_score);
+
+  if (!hasDistinctFinal) return primary;
+
+  return `${primary} (${match.final_home_score}–${match.final_away_score}${getFinalScoreSuffix(match.score_duration ?? null)})`;
+}
+
 function buildResultNotificationBody(
-  match: Pick<Match, "home_team" | "away_team" | "home_score" | "away_score">,
+  match: Pick<Match, "home_team" | "away_team" | "home_score" | "away_score"> & Partial<Pick<Match, "final_home_score" | "final_away_score" | "score_duration">>,
   summary: MatchBetSummary
 ): string {
   const lines = [`Match: ${match.home_team} vs ${match.away_team}`];
 
-  if (match.home_score !== null && match.away_score !== null) {
-    lines.push(`Score: ${match.home_score}–${match.away_score}`);
+  const resolvedScore = formatResolvedScore(match);
+  if (resolvedScore) {
+    lines.push(`Score: ${resolvedScore}`);
   } else {
     lines.push("Score: Available in the app");
   }

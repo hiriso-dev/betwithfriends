@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
+import { getMatchScoreDisplay } from "@/lib/match-score";
 
 type Match = {
   id: string;
@@ -13,6 +14,9 @@ type Match = {
   match_date: number;
   home_score: number | null;
   away_score: number | null;
+  final_home_score: number | null;
+  final_away_score: number | null;
+  score_duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string;
   group_name: string | null;
@@ -212,6 +216,8 @@ export default function MatchCard({
 
   const resultColor = { exact: "text-success", result: "text-warning", wrong: "text-danger", null: "text-muted" }[betResult ?? "null"];
   const resultLabel = { exact: "⭐ Exact!", result: "✓ Correct result", wrong: "✗ Wrong", null: "" }[betResult ?? "null"];
+  const scoreDisplay = getMatchScoreDisplay(match);
+  const primaryScore = scoreDisplay.primary ?? `${match.home_score ?? 0} – ${match.away_score ?? 0}`;
 
   return (
     <div className={`rounded-2xl border bg-surface transition ${
@@ -383,12 +389,15 @@ export default function MatchCard({
                     const params = groupId ? `?group_id=${groupId}` : "";
                     router.push(`/matches/${match.id}/bets${params}`);
                   }}
-                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 transition active:bg-surface-hover"
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 transition active:bg-surface-hover"
                   title="See everyone's bets"
                 >
-                  <span className="text-2xl font-black tabular-nums">
-                    {match.home_score ?? 0} – {match.away_score ?? 0}
-                  </span>
+                    <span className="flex flex-col items-center leading-none">
+                      <span className="text-2xl font-black tabular-nums">{primaryScore}</span>
+                      {scoreDisplay.secondary && (
+                        <span className="mt-1 text-[10px] font-medium text-muted">{scoreDisplay.secondary}</span>
+                      )}
+                    </span>
                   <span className="text-base text-muted">👁</span>
                 </button>
               ) : (

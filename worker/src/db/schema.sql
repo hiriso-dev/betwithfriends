@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS matches (
   match_date INTEGER NOT NULL,
   home_score INTEGER,
   away_score INTEGER,
+  final_home_score INTEGER,
+  final_away_score INTEGER,
+  score_duration TEXT,
   status TEXT DEFAULT 'scheduled',
   stage TEXT,
   group_name TEXT,
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS matches (
   -- this match (everyone who could be notified has bet or already been sent),
   -- so the every-minute pass can skip it instead of re-querying each tick.
   reminders_done INTEGER NOT NULL DEFAULT 0,
+  last_api_sync_at INTEGER,
   updated_at INTEGER DEFAULT (unixepoch())
 );
 

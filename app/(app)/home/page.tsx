@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
+import { getMatchScoreDisplay } from "@/lib/match-score";
 
 type Match = {
   id: string;
@@ -10,6 +11,8 @@ type Match = {
   home_team_code: string; away_team_code: string;
   match_date: number;
   home_score: number | null; away_score: number | null;
+  final_home_score: number | null; final_away_score: number | null;
+  score_duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string; group_name: string | null;
   stadium: string | null; venue_city: string | null;
@@ -62,6 +65,16 @@ export default function HomePage() {
       .catch(() => router.push("/login"))
       .finally(() => setLoading(false));
   }, [router]);
+
+  // Live score ticker — poll every 60s when any match is live
+  useEffect(() => {
+    const hasLive = matches.some(m => m.status === "live");
+    if (!hasLive || !selectedGroup) return;
+    const t = setInterval(() => {
+      apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [matches, selectedGroup]);
 
   useEffect(() => {
     if (!selectedGroup || loading) return;
@@ -265,6 +278,7 @@ export default function HomePage() {
               </div>
               {recentFinished.map(m => {
                 const bet = m.my_bet;
+                const scoreDisplay = getMatchScoreDisplay(m);
                 const betResult = bet
                   ? bet.home_score_pred === m.home_score && bet.away_score_pred === m.away_score ? "exact"
                   : (bet.home_score_pred > bet.away_score_pred) === (m.home_score! > m.away_score!) || (bet.home_score_pred === bet.away_score_pred) === (m.home_score === m.away_score) ? "result"
@@ -274,7 +288,7 @@ export default function HomePage() {
                 return (
                   <div key={m.id} className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {m.home_score} – {m.away_score} <Flag code={m.away_team_code} /> {m.away_team}</p>
+                      <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {scoreDisplay.inline ?? `${m.home_score} – ${m.away_score}`} <Flag code={m.away_team_code} /> {m.away_team}</p>
                       <p className="text-[10px] text-muted">Group {m.group_name}</p>
                     </div>
                     {bet && (

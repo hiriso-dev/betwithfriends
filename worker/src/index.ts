@@ -1,13 +1,15 @@
 import { Env, Match } from "./types";
 import { handleAuth } from "./handlers/auth";
 import { handleGroups } from "./handlers/groups";
+import { ipLimiter, userLimiter, rateLimitResponse } from "./middleware/rate-limit";
 import { handleMatches } from "./handlers/matches";
 import { handleBets } from "./handlers/bets";
+import { handleBetHistory } from "./handlers/bet-history";
 import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { handleStandings } from "./handlers/standings";
 import { handleAdmin } from "./handlers/admin";
-import { syncScores, syncScorers, hasMatchNeedingScoreSync } from "./services/scores-sync";
+import { syncScores, syncTrackedMatches, syncScorers, hasMatchNeedingScoreSync } from "./services/scores-sync";
 import { processMatchResult } from "./services/scoring";
 import {
   sendPreGameReminders,
@@ -45,8 +47,10 @@ const worker = {
     try {
       const url = new URL(request.url);
       const { pathname } = url;
-      // Auth routes (no JWT required)
+      // Auth routes (no JWT required) — per-IP rate limit
       if (pathname.startsWith("/api/auth")) {
+        const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+        if (!ipLimiter.check(ip)) return rateLimitResponse(origin);
         return await handleAuth(request, env, url, json, err, origin);
       }
 
@@ -61,11 +65,17 @@ const worker = {
       const userExists = await env.DB.prepare("SELECT id FROM users WHERE id = ?").bind(auth.userId).first();
       if (!userExists) return err("Session expired — please log in again", 401, origin);
 
+      // Authenticated routes — per-user rate limit
+      if (!userLimiter.check(auth.userId)) return rateLimitResponse(origin);
+
       if (pathname.startsWith("/api/groups")) {
         return await handleGroups(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/matches")) {
         return await handleMatches(request, env, url, auth, json, err, origin);
+      }
+      if (pathname.startsWith("/api/bets/history")) {
+        return await handleBetHistory(request, env, url, auth, json, err, origin);
       }
       if (pathname.startsWith("/api/bets")) {
         return await handleBets(request, env, url, auth, json, err, origin);
@@ -184,12 +194,12 @@ const worker = {
     // doing so means a reminder is never missed in the hour before kickoff.
     await sendPreGameReminders(env);
 
-    // Score sync: only poll football-data.org when a match is in its scoring
-    // window (kicked off 105 min–6h ago, not yet finished). One bulk call covers
-    // every match, so even at 1×/min we stay far under the free-tier 10 calls/min
-    // (syncScorers self-throttles to every 30 min). Outside that window: 0 calls.
+    // Match sync: refresh tracked matches by api_match_id when they are due, and
+    // run a catch-up finalization pass for any finished match whose bet points are
+    // still unresolved. The tracked refresh caps football-data.org calls/tick so
+    // we stay within the free-tier budget while still keeping live matches current.
     if (await hasMatchNeedingScoreSync(env)) {
-      await syncScores(env);
+      await syncTrackedMatches(env);
       await syncScorers(env);
     }
   },

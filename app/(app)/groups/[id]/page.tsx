@@ -31,6 +31,8 @@ export default function GroupDetailPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(isNew);
+  const [confirmRemove, setConfirmRemove] = useState<{ userId: string; pseudo: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -107,6 +109,14 @@ export default function GroupDetailPage() {
                   {m.is_me && <span className="ml-1 text-xs text-muted">(you)</span>}
                 </span>
                 <span className="font-bold">{Math.round(m.total_points)}pts</span>
+                {group.is_admin && !m.is_me && (
+                  <button
+                    onClick={() => setConfirmRemove({ userId: m.user_id, pseudo: m.pseudo })}
+                    className="ml-2 rounded-lg border border-border px-2 py-1 text-[11px] text-danger transition active:bg-danger/10"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -120,6 +130,44 @@ export default function GroupDetailPage() {
           inviteCode={group.invite_code}
           onClose={() => setShowInvite(false)}
         />
+      )}
+
+      {/* Confirm remove member dialog */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-safe">
+          <div className="w-full max-w-sm rounded-2xl bg-surface border border-border p-6 mb-8">
+            <h3 className="font-bold text-base mb-2">Remove {confirmRemove.pseudo}?</h3>
+            <p className="text-sm text-muted mb-5">They will lose access to this group and all their bets in it will be deleted.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmRemove(null)}
+                disabled={removing}
+                className="flex-1 rounded-xl border border-border py-3 text-sm font-semibold transition active:bg-surface-hover"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={removing}
+                onClick={async () => {
+                  setRemoving(true);
+                  try {
+                    await apiFetch(`/api/groups/${params.id}/members/${confirmRemove.userId}`, { method: "DELETE" });
+                    setMembers(prev => prev.filter(m => m.user_id !== confirmRemove.userId));
+                    setGroup(prev => prev ? { ...prev, member_count: prev.member_count - 1 } : prev);
+                    setConfirmRemove(null);
+                  } catch {
+                    // keep dialog open so user can retry
+                  } finally {
+                    setRemoving(false);
+                  }
+                }}
+                className="flex-1 rounded-xl bg-danger py-3 text-sm font-semibold text-white transition active:scale-95 disabled:opacity-50"
+              >
+                {removing ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

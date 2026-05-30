@@ -18,6 +18,8 @@ type Match = {
   home_team_code: string; away_team_code: string;
   match_date: number;
   home_score: number | null; away_score: number | null;
+  final_home_score: number | null; final_away_score: number | null;
+  score_duration: "REGULAR" | "EXTRA_TIME" | "PENALTY_SHOOTOUT" | null;
   status: "scheduled" | "live" | "finished" | "postponed";
   stage: string; group_name: string | null;
   stadium: string | null; venue_city: string | null;
@@ -116,6 +118,9 @@ export default function FixturesPage() {
     );
   }
 
+  const GROUP_STAGE = "Group Stage";
+  const KNOCKOUT_ROUND_ORDER = ["Round of 32", "Round of 16", "Quarter-finals", "Semi-finals", "3rd Place", "Final"];
+
   const comingMatches = [...allMatches]
     .filter(m => m.status !== "finished")
     .filter(m => !onlyUnbet || !m.my_bet)
@@ -137,7 +142,22 @@ export default function FixturesPage() {
     }, {} as Record<string, Match[]>);
   }
 
-  const comingByDay = Object.entries(groupByDay(comingMatches));
+  // Split coming matches into group stage (by day) and knockout rounds
+  const comingGroupStage = comingMatches.filter(m => m.stage === GROUP_STAGE || m.group_name !== null);
+  const comingKnockout = comingMatches.filter(m => m.stage !== GROUP_STAGE && m.group_name === null);
+  const knockoutByRound = KNOCKOUT_ROUND_ORDER.reduce((acc, round) => {
+    const ms = comingKnockout.filter(m => m.stage === round);
+    if (ms.length > 0) acc[round] = ms;
+    return acc;
+  }, {} as Record<string, Match[]>);
+  // Any rounds not in our ordered list (future API additions)
+  for (const m of comingKnockout) {
+    if (!KNOCKOUT_ROUND_ORDER.includes(m.stage) && !knockoutByRound[m.stage]) {
+      knockoutByRound[m.stage] = comingKnockout.filter(x => x.stage === m.stage);
+    }
+  }
+
+  const comingByDay = Object.entries(groupByDay(comingGroupStage));
   const pastByDay = Object.entries(groupByDay(pastMatches));
   const groupMatches = allMatches.filter(m => m.group_name === `GROUP_${selectedWcGroup}`).sort((a, b) => a.match_date - b.match_date);
   const standings = computeStandings(groupMatches);
@@ -203,7 +223,7 @@ export default function FixturesPage() {
               To bet {unbetCount > 0 && <span className={`ml-1 ${onlyUnbet ? "opacity-70" : "text-accent"}`}>{unbetCount}</span>}
             </button>
           </div>
-          {comingByDay.length === 0 && (
+          {comingByDay.length === 0 && Object.keys(knockoutByRound).length === 0 && (
             <p className="py-12 text-center text-sm text-muted">
               {onlyUnbet ? "All caught up — you've bet on every upcoming match 🎯" : "No upcoming matches"}
             </p>
@@ -217,6 +237,25 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                    onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                ))}
+              </div>
+            </section>
+          ))}
+          {/* Knockout rounds — separate section per round */}
+          {Object.entries(knockoutByRound).map(([round, roundMatches]) => (
+            <section key={round}>
+              <div className="mb-2 px-1 lg:mb-4 lg:flex lg:items-center lg:gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-accent bg-accent/10 border border-accent/30 rounded px-2 py-0.5">Knockout</span>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted lg:text-sm">{round}</p>
+                </div>
+                <div className="hidden lg:block flex-1 h-px bg-border" />
+                <p className="hidden lg:block text-xs text-muted">{roundMatches.length} match{roundMatches.length === 1 ? "" : "es"}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {roundMatches.map(match => (
                   <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
