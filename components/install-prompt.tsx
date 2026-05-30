@@ -79,15 +79,15 @@ function installTitle(mode: Mode): string {
 
 function installDescription(mode: Mode): string {
   if (mode === "ios-other") {
-    return "Open this page in Safari to install the app and get notification support on iPhone.";
+    return "Open this page in Safari to install BetWithFriends and turn on reminders before kickoff plus score updates after full time on iPhone.";
   }
   if (mode === "ios-safari") {
-    return "Add the app from Safari for quicker access and notification support on iPhone and iPad.";
+    return "Add BetWithFriends from Safari for one-tap access, reminders before kickoff, and score updates after full time on iPhone and iPad.";
   }
   if (mode === "android-other") {
-    return "Add the app from your browser menu for quick access and easier notification support.";
+    return "Add the app from your browser menu for one-tap access, reminders before kickoff, and score updates after full time.";
   }
-  return "Install the app for one-tap access and notification support.";
+  return "Install the app for one-tap access, reminders before kickoff, and score updates after full time.";
 }
 
 // ---- Floating CTA + Sheet (global) ----
@@ -156,7 +156,7 @@ export function InstallPrompt() {
         <span className="min-w-0 text-left">
           <span className="block text-xs font-black uppercase tracking-[0.2em] text-accent">Install</span>
           <span className="block text-sm font-semibold">Install app</span>
-          <span className="block text-xs text-muted">Notifications + one-tap access</span>
+          <span className="block text-xs text-muted">Reminders + score updates</span>
         </span>
       </button>
 
@@ -183,7 +183,8 @@ export function InstallPrompt() {
               <div className="rounded-2xl border border-border bg-background/40 p-4">
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-accent">Why install</p>
                 <div className="space-y-2">
-                  <BenefitLine text="Get reminders and result notifications more reliably." />
+                  <BenefitLine text="Get a reminder before kickoff if you still need to place a bet." />
+                  <BenefitLine text="See the final score and your points right after full time." />
                   <BenefitLine text="Open BetWithFriends in one tap from your home screen." />
                 </div>
               </div>
@@ -213,7 +214,7 @@ export function InstallPrompt() {
 
                 {mode === "ios-other" && (
                   <div className="space-y-3">
-                    <Step number="1" text="Open this page in Safari first." />
+                    <Step number="1" text="Open this page in Safari to start the install." />
                     <Step number="2" text="In Safari, use Share ⬆ then Add to Home Screen." />
                     <a
                       href={safariUrl()}

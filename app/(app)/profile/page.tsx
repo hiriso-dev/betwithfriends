@@ -14,6 +14,38 @@ type NotifPrefs = {
   result_after_game: boolean;
 };
 
+type InstallMode = ReturnType<typeof useInstallable>["mode"];
+
+function getPushSetupMessage(
+  installMode: InstallMode,
+  standalone: boolean,
+  issue: "insecure" | "notifications" | "service-workers" | "push-api"
+) {
+  const installAction =
+    installMode === "ios-other"
+      ? "Open this page in Safari, add BetWithFriends to your Home Screen, then enable notifications."
+      : installMode === "ios-safari"
+        ? "Add BetWithFriends to your Home Screen in Safari, then enable notifications."
+        : installMode === "prompt" || installMode === "android-other"
+          ? "Install BetWithFriends from your browser, then enable notifications."
+          : "Use a browser that supports notifications, then enable them.";
+
+  const alertSummary =
+    "That unlocks a reminder before kickoff and a score update with your points after full time.";
+
+  if (issue === "insecure") {
+    return standalone
+      ? `This app is not running over HTTPS right now. Reopen BetWithFriends securely from Safari and reinstall if needed. ${alertSummary}`
+      : `Notifications need HTTPS. ${installAction} ${alertSummary}`;
+  }
+
+  if (standalone) {
+    return `This installed app still cannot access notifications in this context. Reopen BetWithFriends from Safari and try again. ${alertSummary}`;
+  }
+
+  return `${installAction} ${alertSummary}`;
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -45,6 +77,14 @@ export default function ProfilePage() {
         }
       });
 
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     void (async () => {
       if (typeof window === "undefined") return;
 
@@ -56,11 +96,7 @@ export default function ProfilePage() {
         if (!cancelled) {
           setPushSupported(false);
           setPushEnabled(false);
-          setPushBlockedReason(
-            standalone
-              ? "This home-screen app is running over HTTP. On iPhone and iPad, notifications only work when the app is opened from Safari over HTTPS."
-              : "Push notifications require HTTPS."
-          );
+          setPushBlockedReason(getPushSetupMessage(installMode, standalone, "insecure"));
         }
         return;
       }
@@ -69,7 +105,7 @@ export default function ProfilePage() {
         if (!cancelled) {
           setPushSupported(false);
           setPushEnabled(false);
-          setPushBlockedReason("This browser does not expose the Notifications API in this context.");
+          setPushBlockedReason(getPushSetupMessage(installMode, standalone, "notifications"));
         }
         return;
       }
@@ -78,7 +114,7 @@ export default function ProfilePage() {
         if (!cancelled) {
           setPushSupported(false);
           setPushEnabled(false);
-          setPushBlockedReason("This browser does not expose service workers in this context.");
+          setPushBlockedReason(getPushSetupMessage(installMode, standalone, "service-workers"));
         }
         return;
       }
@@ -94,11 +130,7 @@ export default function ProfilePage() {
         if (!supported) {
           if (!cancelled) {
             setPushEnabled(false);
-            setPushBlockedReason(
-              standalone
-                ? "This standalone app still does not expose the Push API. On iPhone and iPad, use Safari 16.4+ and install from Safari over HTTPS."
-                : "This browser does not expose the Push API in this context."
-            );
+            setPushBlockedReason(getPushSetupMessage(installMode, standalone, "push-api"));
           }
           return;
         }
@@ -130,7 +162,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [installMode]);
 
   async function enablePush() {
     if (!pushSupported) return;
@@ -226,8 +258,11 @@ export default function ProfilePage() {
               <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">Recommended</p>
               <h2 className="mt-1 text-lg font-black">Add BetWithFriends to your Home Screen</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Add BetWithFriends to your Home Screen for faster access, game reminders, and points notifications after each match.
+                Install the app for one-tap access, a reminder before kickoff, and a score update with your points after full time.
               </p>
+              <div className="mt-3">
+                <PushBenefitChips />
+              </div>
             </div>
           </div>
 
@@ -235,7 +270,7 @@ export default function ProfilePage() {
             {installMode === "prompt" && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  Install it now from the browser prompt, then open it from your home screen for the app-like experience.
+                  Install it now, then enable notifications for pre-game reminders and full-time score updates.
                 </p>
                 <button
                   onClick={triggerInstall}
@@ -257,7 +292,7 @@ export default function ProfilePage() {
             {installMode === "ios-other" && (
               <div className="space-y-3">
                 <p className="text-sm text-muted">
-                  iPhone installation has to start in Safari before notifications can work.
+                  On iPhone, notifications start with the installed app. Open this page in Safari, add it to your Home Screen, then enable alerts.
                 </p>
                 <a
                   href={typeof window !== "undefined"
@@ -332,13 +367,19 @@ export default function ProfilePage() {
         {!pushSupported ? (
           <div className="p-4">
             <p className="text-sm text-muted">
-              {pushBlockedReason ?? "Push notifications need a browser with Push API support. On iPhone and iPad, install the app to the home screen in Safari first."}
+              {pushBlockedReason ?? "Install BetWithFriends first to get a reminder before kickoff and a score update with your points after full time. On iPhone and iPad, the install has to start in Safari."}
             </p>
+            <div className="mt-4 rounded-xl border border-accent/20 bg-accent/10 p-3">
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-accent">With the installed app</p>
+              <div className="mt-2">
+                <PushBenefitChips />
+              </div>
+            </div>
           </div>
         ) : !pushEnabled ? (
           <div className="p-4">
             <p className="mb-3 text-sm text-muted">
-              Enable push notifications to get reminders before games and results after.
+              Enable push notifications to get a reminder before kickoff and a score update with your points after full time.
             </p>
             <button
               onClick={enablePush}
@@ -434,6 +475,19 @@ function Toggle({
           }`}
         />
       </button>
+    </div>
+  );
+}
+
+function PushBenefitChips() {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <span className="rounded-full border border-accent/20 bg-background/60 px-3 py-1 text-xs text-foreground">
+        Reminder before kickoff
+      </span>
+      <span className="rounded-full border border-accent/20 bg-background/60 px-3 py-1 text-xs text-foreground">
+        Final score + points
+      </span>
     </div>
   );
 }
