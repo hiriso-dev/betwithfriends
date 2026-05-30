@@ -31,7 +31,7 @@
 
 - [x] 5.1 Add `GET /api/bets/history` route in `worker/src/index.ts`
 - [x] 5.2 Create `worker/src/handlers/bet-history.ts` — authenticate user, accept `group_id` (optional), `limit` (default 50, max 100), `offset` (default 0) query params
-- [x] 5.3 Write SQL query joining `bets` with `matches` and `groups` (via `group_members`) ordered by `match_date DESC` with LIMIT/OFFSET; include a COUNT(*) for total
+- [x] 5.3 Write SQL query joining `bets` with `matches` and `groups` (via `group_members`) ordered by `match_date DESC` with LIMIT/OFFSET; include a COUNT(\*) for total
 - [x] 5.4 If `group_id` is provided, verify the user is a member of that group (return 403 otherwise) and add a WHERE clause
 
 ## 6. Bet History — Frontend

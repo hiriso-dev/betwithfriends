@@ -7,6 +7,7 @@ This stale match state cascades into the rest of the product. The frontend alrea
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Refresh tracked matches through scheduled, live, and finished states even when they do not belong to the World Cup bulk-sync path.
 - Keep football-data.org usage within the 10-calls-per-minute limit while prioritizing live and recently finished matches.
 - Make finalization idempotent so missed sync ticks can still update scores, compute points, and send result notifications later.
@@ -14,6 +15,7 @@ This stale match state cascades into the rest of the product. The frontend alrea
 - Keep fixtures and home page live views current without introducing user-visible reloads or resetting betting UI state.
 
 **Non-Goals:**
+
 - Goal-by-goal push notifications or websocket streaming.
 - Replacing football-data.org as the score source.
 - Changing the betting rules, confidence modifiers, or double-up scoring model.
@@ -26,11 +28,13 @@ This stale match state cascades into the rest of the product. The frontend alrea
 The worker will add a new scheduled sync pass that selects tracked matches from D1 when they are within an active lifecycle window, then fetches football-data.org `/matches/{api_match_id}` for each due row.
 
 Selection rules:
+
 - include matches from shortly before kickoff through a recent post-match window
 - prioritize rows that are already `live`, rows whose kickoff has passed but are not terminal, and rows that still have unresolved bet scoring
 - cap the number of external calls per cron tick so the worker stays within the 10-calls-per-minute limit
 
 Alternatives considered:
+
 - Keep using only `/competitions/WC/matches`: rejected because it cannot finalize tracked non-WC matches like `552096`.
 - Store `competition_code` and poll one bulk endpoint per competition: rejected because it adds schema and orchestration complexity while the app only needs a handful of active match refreshes at a time.
 - Trigger football-data.org fetches from user page requests: rejected because user traffic would directly drive third-party API usage and make delivery nondeterministic.
@@ -40,6 +44,7 @@ Rationale: the tracked-match pass fixes the concrete failure mode with the small
 ### D2. Keep `home_score` / `away_score` as the canonical betting score and add explicit final-score fields
 
 The matches table will keep `home_score` and `away_score` as the canonical score used by scoring and bet evaluation once a match is finished. New fields will store the displayed real final result when it differs from the betting score:
+
 - `final_home_score`
 - `final_away_score`
 - `score_duration` (for example `REGULAR`, `EXTRA_TIME`, `PENALTY_SHOOTOUT`)
@@ -48,6 +53,7 @@ The matches table will keep `home_score` and `away_score` as the canonical score
 For live matches, `home_score` / `away_score` continue to hold the latest live score. When a match finishes, the worker persists the regular-time score into those canonical fields and persists the actual final outcome separately when extra time or penalties occurred.
 
 Alternatives considered:
+
 - Repurpose `home_score` / `away_score` to store the actual final result and add new scoring-only columns: rejected because every existing scoring, standings, and notification consumer would need to be inverted.
 - Store the football-data score payload as JSON only: rejected because D1 queries and TypeScript payloads would become harder to reason about and validate.
 
@@ -58,12 +64,14 @@ Rationale: additive schema changes preserve current consumers while making the r
 The worker will extract a dedicated finalization path, for example `finalizeMatchIfReady(env, match)`, that runs after every successful sync update and in a catch-up sweep for any finished match whose bets still have `points_earned IS NULL`.
 
 Finalization rules:
+
 - only run when the persisted match is terminal and the canonical betting score is present
 - compute unresolved bet points exactly once
 - update group totals only once per unresolved bet row
 - send result notifications only after points are available
 
 Alternatives considered:
+
 - Keep finalization inline inside the sync loop: rejected because the current `justFinished` branching is harder to reuse for missed transitions and catch-up processing.
 - Recompute all bets for every finished match on every cron tick: rejected because it is unnecessary write churn and makes duplicate notification prevention harder.
 
@@ -74,6 +82,7 @@ Rationale: idempotent finalization isolates the business rule that matters most 
 Pre-game reminders remain DB-driven, but result notifications will be built from the persisted match row after finalization completes. Notification bodies will show the regular-time score first and, when `score_duration` indicates extra time or penalties, append the actual final result in parentheses.
 
 Alternatives considered:
+
 - Send result notifications directly from the football-data response before D1 is updated: rejected because points and user summaries could still be stale.
 - Leave notification text unchanged: rejected because a penalty shootout match would appear scored on one result but displayed on another.
 
@@ -82,12 +91,14 @@ Rationale: the notification copy should match the exact resolved state users see
 ### D5. Keep client polling, but unify it around backend freshness and dual-score rendering
 
 The fixtures and home page will continue polling the worker while a visible match is live. The contract changes are:
+
 - page-level polling runs every 30 seconds while a live match is rendered
 - polling stops when no rendered match is live
 - UI components render the canonical betting score as the main score and append the real final score in parentheses when it differs
 - polling updates must not close the existing bet sheet or reset in-progress edits
 
 Alternatives considered:
+
 - SSE or websockets: rejected because they add infrastructure and do not solve the actual stale-source problem.
 - No frontend polling changes: rejected because the home page still lags behind the fixtures page today.
 

@@ -7,6 +7,7 @@ Six capabilities are being introduced: knockout stage betting, per-match bet vie
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Support betting on all 30 knockout stage matches (R32 → Final)
 - Allow users to view group peers' bets for a specific match after kickoff
 - Provide a personal bet history page across all groups
@@ -15,6 +16,7 @@ Six capabilities are being introduced: knockout stage betting, per-match bet vie
 - Protect the API worker with basic per-IP / per-user rate limiting
 
 **Non-Goals:**
+
 - Custom scoring rules for knockout matches (same rules as group stage apply)
 - Real-time WebSocket live scores (polling is sufficient at this scale)
 - Global site-wide admin dashboard
