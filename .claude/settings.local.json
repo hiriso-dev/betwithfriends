@@ -25,7 +25,14 @@
       "Bash(echo \"===EXIT $?===\")",
       "Bash(echo \"=== tsc exit: $? ===\")",
       "Bash(echo \"exit=$?\")",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(openspec new *)",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Bash(grep -iA3 -E \"cron|trigger|APP_URL|\\\\[vars\\\\]\")",
+      "Bash(openspec status *)",
+      "Bash(openspec instructions *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('INSTRUCTION:\\\\n',d['instruction']\\); print\\('\\\\nTEMPLATE:\\\\n',d['template']\\); print\\('\\\\nDEPS:',d['dependencies']\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('INSTRUCTION:\\\\n',d['instruction']\\); print\\('\\\\nTEMPLATE:\\\\n',d['template']\\); print\\('\\\\nOUTPUT:',d['outputPath']\\); print\\('DEPS:',d['dependencies']\\)\")"
     ],
     "additionalDirectories": [
       "/Users/jerome/Documents/betwithfriends/app/(app)/teams",

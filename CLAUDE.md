@@ -81,7 +81,7 @@ Lock at WC2026 kick-off (June 11 2026):
 
 One trigger `* * * * *` (every minute) in `worker/wrangler.toml`; `index.ts#scheduled` runs two steps each tick:
 
-1. **Pre-game reminders** (`sendPreGameReminders`) → DB-only, no API call. Sends a "place your bet" push for any `scheduled` match kicking off within the next 60 min, to users who (1) haven't bet, (2) have a push subscription, (3) have the reminder pref on (default on), and (4) haven't already been reminded (deduped via `notification_deliveries`). The window is the full hour before kickoff (not a narrow slice), so a single missed tick can't skip a match. Once nobody is left to remind, the match is flagged `matches.reminders_done = 1` and skipped on later ticks.
+1. **Pre-game reminders** (`sendPreGameReminders`) → DB-only, no API call. Sends a "place your bet" push for any `scheduled` match kicking off within the next 60 min, to users who (1) haven't bet, (2) have a push subscription, (3) have the reminder pref on (default on), and (4) haven't already been reminded (deduped via `notification_deliveries`). The window is the full hour before kickoff (not a narrow slice), so a single missed tick can't skip a match. A match is flagged `matches.reminders_done = 1` (and skipped on later ticks) **only once its kickoff has passed** — never merely because the recipient set was empty on a single tick. This means a user who subscribes (or otherwise becomes eligible) mid-window still gets their one reminder before kickoff. To debug a missed reminder, use `GET /api/admin/notification-debug?match_id=&user_id=` (admin-only), which reports each precondition's state and the resulting `blocking_reasons`.
 2. **Score sync** → only when `hasMatchNeedingScoreSync()` is true (a match kicked off **between 105 min and 6h ago** and isn't `finished`). The 105-min floor means we never poll during play — regular time can't end before 45'+15' HT+45' = 105'. One bulk `/competitions/WC/matches` call covers every match, so even at 1×/min we stay far under the football-data.org free-tier limit of 10 calls/min (`syncScorers` self-throttles to every 30 min); outside the window it's 0 calls. `scores-sync.ts` → football-data.org → update D1 → `scoring.ts` computes points → result push notifications. A match that goes to ET/penalties keeps being polled (not `finished` yet) until the API reports FINISHED; scoring still uses the 90' `regularTime` score.
 
 **Scoring uses regular time only (90 min):** `score.regularTime` when present, falling back to `score.fullTime` for matches that never went to extra time. Extra time and penalties are never counted toward points.
@@ -114,8 +114,16 @@ Auth pages: `app/(auth)/login/` — email+password, toggle between sign-in and r
 | `special-bets.ts` | `GET/POST /api/special-bets?group_id=` |
 | `notifications.ts` | `POST /api/push/subscribe`, `DELETE /api/push/unsubscribe`, `GET/PUT /api/push/prefs` |
 | `standings.ts` | `GET /api/standings?group_id=`, `GET /api/scorers` |
+| `admin.ts` | (admin email only) `POST /api/admin/sync`, `POST /api/admin/resolve-special`, `GET /api/admin/notification-debug?match_id=&user_id=` — read-only per-precondition diagnosis of why a user did/didn't get a pre-game reminder |
 
 Dev-only (no `FOOTBALL_DATA_API_KEY`): `POST /api/dev/score-match` — manually trigger scoring for a match.
+
+Optional one-time backfill after deploying the reminder fix — re-enable any in-window match that the old code prematurely flagged complete:
+
+```bash
+npx wrangler d1 execute betwithfriends --config worker/wrangler.production.toml --remote \
+  --command "UPDATE matches SET reminders_done = 0 WHERE status = 'scheduled' AND reminders_done = 1 AND match_date > unixepoch() AND match_date <= unixepoch() + 3600"
+```
 
 ## Key components
 

@@ -80,5 +80,82 @@ export async function handleAdmin(
     return json({ ok: true, summary }, 200, origin);
   }
 
+  // GET /api/admin/notification-debug?match_id=&user_id=
+  // Read-only: reports, for a user + match, the state of every pre-game reminder
+  // precondition and the resulting eligibility. Sends nothing, writes nothing.
+  if (pathname === "/api/admin/notification-debug" && request.method === "GET") {
+    const matchId = url.searchParams.get("match_id");
+    if (!matchId) return err("match_id is required", 400, origin);
+    const userId = url.searchParams.get("user_id") ?? auth.userId;
+
+    const match = await env.DB.prepare(
+      "SELECT id, status, match_date, reminders_done FROM matches WHERE id = ?"
+    ).bind(matchId).first<{ id: string; status: string; match_date: number; reminders_done: number }>();
+    if (!match) return err("Match not found", 404, origin);
+
+    const now = Math.floor(Date.now() / 1000);
+    const kickoffPassed = match.match_date <= now;
+    const inWindow = match.match_date > now && match.match_date <= now + 60 * 60;
+
+    // Group membership + how many of the user's groups still lack a bet for this match.
+    const groupCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM group_members WHERE user_id = ?"
+    ).bind(userId).first<{ n: number }>();
+    const betGroupCount = await env.DB.prepare(
+      "SELECT COUNT(DISTINCT group_id) AS n FROM bets WHERE user_id = ? AND match_id = ?"
+    ).bind(userId, matchId).first<{ n: number }>();
+    const totalGroups = groupCount?.n ?? 0;
+    const groupsWithBet = betGroupCount?.n ?? 0;
+    const inGroup = totalGroups > 0;
+    const hasBetAllGroups = totalGroups > 0 && groupsWithBet >= totalGroups;
+
+    const sub = await env.DB.prepare(
+      "SELECT 1 FROM push_subscriptions WHERE user_id = ? LIMIT 1"
+    ).bind(userId).first();
+    const hasPushSubscription = sub !== null;
+
+    const prefs = await env.DB.prepare(
+      "SELECT remind_before_game FROM notification_prefs WHERE user_id = ?"
+    ).bind(userId).first<{ remind_before_game: number }>();
+    const remindBeforeGame = prefs ? prefs.remind_before_game === 1 : true; // default on
+
+    const delivered = await env.DB.prepare(
+      "SELECT 1 FROM notification_deliveries WHERE user_id = ? AND match_id = ? AND delivery_type = 'pre_game' LIMIT 1"
+    ).bind(userId, matchId).first();
+    const alreadyDeliveredPreGame = delivered !== null;
+
+    const blockingReasons: string[] = [];
+    if (match.status !== "scheduled") blockingReasons.push("match_not_scheduled");
+    if (kickoffPassed) blockingReasons.push("kickoff_passed");
+    else if (!inWindow) blockingReasons.push("outside_window");
+    if (match.reminders_done === 1) blockingReasons.push("reminders_done_flag");
+    if (!inGroup) blockingReasons.push("not_in_group");
+    if (!hasPushSubscription) blockingReasons.push("no_push_subscription");
+    if (!remindBeforeGame) blockingReasons.push("reminder_pref_off");
+    if (hasBetAllGroups) blockingReasons.push("already_bet_all_groups");
+    if (alreadyDeliveredPreGame) blockingReasons.push("already_delivered");
+
+    return json({
+      match: {
+        id: match.id,
+        status: match.status,
+        match_date: match.match_date,
+        reminders_done: match.reminders_done === 1,
+        in_window: inWindow,
+        kickoff_passed: kickoffPassed,
+      },
+      user: {
+        user_id: userId,
+        in_group: inGroup,
+        has_push_subscription: hasPushSubscription,
+        remind_before_game: remindBeforeGame,
+        has_bet_all_groups: hasBetAllGroups,
+        already_delivered_pre_game: alreadyDeliveredPreGame,
+      },
+      eligible_now: blockingReasons.length === 0,
+      blocking_reasons: blockingReasons,
+    }, 200, origin);
+  }
+
   return err("Not found", 404, origin);
 }

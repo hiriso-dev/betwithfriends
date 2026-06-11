@@ -451,30 +451,44 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
 export async function sendPreGameReminders(env: Env): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
 
-  // Every scheduled match kicking off within the next hour (kickoff still in the
-  // future — betting locks at kickoff, so there's no point reminding after it).
-  // This is a rolling 0–60 min window rather than a narrow slice, so a single
-  // missed cron tick can't permanently skip a match: any tick in the hour before
-  // kickoff is a chance to send, and notification_deliveries dedups to one send.
-  // `reminders_done = 1` matches are skipped (see below) so settled matches don't
-  // get re-queried every minute.
+  // Candidate matches: still scheduled, not yet flagged complete, and either
+  // inside the 60-min pre-game window OR already kicked off. We include
+  // `match_date <= now` (kicked off) on purpose so that a match is only ever
+  // marked `reminders_done = 1` AFTER kickoff — never because the recipient set
+  // happened to be empty on one tick during the window. That fixes the bug
+  // where a user who subscribed mid-window was permanently skipped: while
+  // kickoff is in the future we re-evaluate recipients every tick, so any tick
+  // in the hour before kickoff is a fresh chance to send (notification_deliveries
+  // dedups to one delivered reminder per user+match).
   const matches = await env.DB.prepare(
-    `SELECT id, home_team, away_team
+    `SELECT id, home_team, away_team, match_date
      FROM matches
      WHERE status = 'scheduled'
        AND reminders_done = 0
-       AND match_date > ?
        AND match_date <= ?`
-  ).bind(now, now + 60 * 60).all<{ id: string; home_team: string; away_team: string }>();
+  ).bind(now + 60 * 60).all<{ id: string; home_team: string; away_team: string; match_date: number }>();
+
+  let totalSent = 0;
+  let totalTempFailures = 0;
+  let totalPermFailures = 0;
+  let flaggedComplete = 0;
 
   for (const match of matches.results) {
+    // Kickoff has passed — betting is locked, so no further reminders are useful.
+    // This is the ONLY place we flag a match complete, so later ticks skip it.
+    if (match.match_date <= now) {
+      await env.DB.prepare("UPDATE matches SET reminders_done = 1 WHERE id = ?")
+        .bind(match.id).run();
+      flaggedComplete += 1;
+      logPreGameMatch(match.id, 0, 0, 0, 0, "flagged_complete_kickoff_passed");
+      continue;
+    }
+
     // Recipients = group members who, for at least one of their groups:
     //   1. haven't placed a bet on this match,
     //   2. have a push subscription (subscribed to notifications), and
     //   3. have the pre-game reminder pref on (default on when no row exists), and
     //   4. haven't already been sent this match's pre-game reminder.
-    // Excluding the already-delivered (4) means an empty result == "nobody left
-    // to remind", which lets us mark the match done and stop re-checking it.
     const rows = await env.DB.prepare(`
       SELECT DISTINCT gm.user_id, ps.subscription_json
       FROM group_members gm
@@ -491,16 +505,13 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
         )
     `).bind(match.id, match.id).all<{ user_id: string; subscription_json: string }>();
 
-    if (rows.results.length === 0) {
-      // Nobody left to remind for this match — stop re-querying it every minute.
-      await env.DB.prepare("UPDATE matches SET reminders_done = 1 WHERE id = ?")
-        .bind(match.id).run();
-      continue;
-    }
+    let sent = 0;
+    let tempFailures = 0;
+    let permFailures = 0;
 
     for (const row of rows.results) {
       const reserved = await reserveDelivery(env, row.user_id, match.id, "pre_game");
-      if (!reserved) continue;
+      if (!reserved) continue; // already reserved this tick (e.g. multi-device) — dedup to one
 
       const sub = JSON.parse(row.subscription_json) as PushSubscription;
       const result = await sendPush(env, sub, {
@@ -515,11 +526,59 @@ export async function sendPreGameReminders(env: Env): Promise<void> {
         ttl: 90 * 60,
       });
 
-      if (!result.ok && !result.permanentFailure) {
+      if (result.ok) {
+        sent += 1;
+      } else if (result.permanentFailure) {
+        permFailures += 1;
+      } else {
+        tempFailures += 1;
+        // Transient failure — release the reservation so a later tick retries.
         await releaseDelivery(env, row.user_id, match.id, "pre_game");
       }
     }
+
+    totalSent += sent;
+    totalTempFailures += tempFailures;
+    totalPermFailures += permFailures;
+
+    let skipReason: string | null = null;
+    if (rows.results.length === 0) skipReason = "no_recipients";
+    else if (sent === 0 && tempFailures + permFailures > 0) skipReason = "all_failed";
+    else if (sent === 0) skipReason = "all_delivered";
+
+    logPreGameMatch(match.id, rows.results.length, sent, tempFailures, permFailures, skipReason);
   }
+
+  // Per-tick summary so a silent run is still attributable in `wrangler tail`.
+  console.log(JSON.stringify({
+    evt: "pregame_tick",
+    candidateMatches: matches.results.length,
+    sent: totalSent,
+    tempFailures: totalTempFailures,
+    permFailures: totalPermFailures,
+    flaggedComplete,
+  }));
+}
+
+// One structured record per candidate match. Logs match IDs and counts only —
+// no PII beyond identifiers already used across the worker.
+function logPreGameMatch(
+  matchId: string,
+  recipientCount: number,
+  sent: number,
+  tempFailures: number,
+  permFailures: number,
+  skipReason: string | null
+): void {
+  console.log(JSON.stringify({
+    evt: "pregame_match",
+    matchId,
+    recipientCount,
+    sent,
+    tempFailures,
+    permFailures,
+    skipReason,
+  }));
 }
 
 async function sendNotificationToUser(
