@@ -8,7 +8,9 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('INSTRUCTION:\\\\n',d['instruction']\\); print\\('\\\\nTEMPLATE:\\\\n',d['template']\\)\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('schema:',d['schemaName']\\); print\\('complete:',d['isComplete']\\)\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('STATE:',d.get\\('state'\\)\\); print\\('CONTEXT FILES:',json.dumps\\(d.get\\('contextFiles'\\),indent=2\\)\\); print\\('PROGRESS:',d.get\\('progress'\\)\\)\")",
-      "Bash(echo \"TSC_EXIT=$?\")"
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Progress:', d['progress']\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('schema:', d['schemaName']\\); print\\('complete:', d['isComplete']\\); [print\\(a['id'], a['status']\\) for a in d['artifacts']]\")"
     ]
   }
 }

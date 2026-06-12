@@ -99,7 +99,7 @@ export default function HomePage() {
   // Countdown: next bet that closes (soonest lock = match_date - 5min, or WC_START for specials)
   const BET_LOCK_MS = 0;
   const specialsDeadline = !tournamentStarted && specialBets.length < SPECIAL_BET_TYPES.length ? WC_START : Infinity;
-  const nextMatchLock = upcoming.length > 0 ? upcoming[0].match_date * 1000 - BET_LOCK_MS : Infinity;
+  const nextMatchLock = nextUnbet ? nextUnbet.match_date * 1000 - BET_LOCK_MS : Infinity;
   const nextDeadlineMs = Math.min(specialsDeadline, nextMatchLock);
   const isSpecialDeadline = specialsDeadline <= nextMatchLock && specialsDeadline < Infinity;
   const msUntilClose = Math.max(0, nextDeadlineMs - tick);
