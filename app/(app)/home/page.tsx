@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
-import { getMatchScoreDisplay } from "@/lib/match-score";
+import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
   id: string;
@@ -95,6 +95,11 @@ export default function HomePage() {
     .filter(m => m.status === "finished")
     .sort((a, b) => b.match_date - a.match_date)
     .slice(0, 3);
+
+  // Matches currently in progress — kept fresh by the 30s live poller above.
+  const liveMatches = matches
+    .filter(m => m.status === "live")
+    .sort((a, b) => a.match_date - b.match_date);
 
   // Countdown: next bet that closes (soonest lock = match_date - 5min, or WC_START for specials)
   const BET_LOCK_MS = 0;
@@ -189,6 +194,50 @@ export default function HomePage() {
       <div className="lg:grid lg:grid-cols-3 lg:gap-6">
         {/* LEFT / MAIN COLUMN — primary actions */}
         <div className="lg:col-span-2 space-y-4 lg:space-y-6">
+          {/* Live now — matches in progress; tap a row to see everyone's bets */}
+          {liveMatches.length > 0 && (
+            <div className="rounded-2xl border border-success/40 bg-surface overflow-hidden shadow-[0_0_20px_rgba(34,197,94,0.08)]">
+              <div className="px-4 py-3 lg:px-6 lg:py-4 border-b border-border flex items-center justify-between">
+                <h2 className="font-semibold text-sm lg:text-base flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                  </span>
+                  Live now
+                </h2>
+                <span className="text-[10px] uppercase tracking-widest font-semibold text-success">
+                  {liveMatches.length} playing
+                </span>
+              </div>
+              {liveMatches.map(m => {
+                const scoreDisplay = getMatchScoreDisplay(m);
+                const primaryScore = scoreDisplay.primary ?? PENDING_SCORE;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => router.push(`/matches/${m.id}/bets${selectedGroup ? `?group_id=${selectedGroup}` : ""}`)}
+                    title="See everyone's bets"
+                    className="w-full flex items-center gap-3 px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
+                  >
+                    <div className="flex-1 min-w-0 text-right">
+                      <p className="text-sm font-bold leading-tight truncate">{m.home_team} <Flag code={m.home_team_code} /></p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider">{m.home_team_code}</p>
+                    </div>
+                    <div className="flex flex-col items-center min-w-[64px]">
+                      <span className="text-xl font-black tabular-nums leading-none">{primaryScore}</span>
+                      <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-success">● Live</span>
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
+                      <p className="text-[10px] text-muted uppercase tracking-wider">{m.away_team_code}</p>
+                    </div>
+                    <span className="shrink-0 text-base text-muted">👁</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Countdown to next bet close */}
           {groups.length > 0 && nextDeadlineMs < Infinity && msUntilClose > 0 && (
             <button
