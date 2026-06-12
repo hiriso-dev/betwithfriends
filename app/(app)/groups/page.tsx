@@ -19,6 +19,27 @@ export default function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteFor, setInviteFor] = useState<Group | null>(null);
+  const [orderError, setOrderError] = useState(false);
+
+  // Move a group up (delta -1) or down (delta +1), persist the new personal order.
+  async function moveGroup(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= groups.length) return;
+    const prev = groups;
+    const next = [...groups];
+    [next[index], next[target]] = [next[target], next[index]];
+    setGroups(next);
+    setOrderError(false);
+    try {
+      await apiFetch("/api/groups/order", {
+        method: "PUT",
+        body: JSON.stringify({ order: next.map((g) => g.id) }),
+      });
+    } catch {
+      setGroups(prev); // revert optimistic reorder on failure
+      setOrderError(true);
+    }
+  }
 
   useEffect(() => {
     apiFetch<Group[]>("/api/groups")
@@ -73,13 +94,41 @@ export default function GroupsPage() {
         </div>
       ) : (
         <>
+          {orderError && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-sm text-danger">
+              <span>Couldn&apos;t save the new order.</span>
+              <span className="text-xs text-muted">Try again</span>
+            </div>
+          )}
           <div className="space-y-3 mb-4">
-            {groups.map((g) => (
+            {groups.map((g, i) => (
               <div
                 key={g.id}
                 className="relative rounded-2xl bg-surface border border-border transition active:scale-98"
               >
-                <Link href={`/groups/${g.id}`} className="block p-4 pr-14">
+                {groups.length > 1 && (
+                  <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveGroup(i, -1); }}
+                      disabled={i === 0}
+                      aria-label={`Move ${g.name} up`}
+                      className="rounded-md p-1 text-muted transition active:text-accent disabled:opacity-25"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); moveGroup(i, 1); }}
+                      disabled={i === groups.length - 1}
+                      aria-label={`Move ${g.name} down`}
+                      className="rounded-md p-1 text-muted transition active:text-accent disabled:opacity-25"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </div>
+                )}
+                <Link href={`/groups/${g.id}`} className={`block p-4 pr-14 ${groups.length > 1 ? "pl-9" : ""}`}>
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold">{g.name}</h3>

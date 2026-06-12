@@ -32,7 +32,7 @@ export async function handleGroups(
       JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
       JOIN group_members gm2 ON gm2.group_id = g.id
       GROUP BY g.id
-      ORDER BY g.created_at DESC
+      ORDER BY COALESCE(gm.sort_order, 1000000) ASC, g.created_at DESC
     `).bind(auth.userId).all();
     return json(rows.results, 200, origin);
   }
@@ -84,6 +84,38 @@ export async function handleGroups(
       .bind(randomId(), group.id, auth.userId, pseudo.trim()).run();
 
     return json({ id: group.id }, 201, origin);
+  }
+
+  // PUT /api/groups/order — persist this user's personal group display order
+  if (pathname === "/api/groups/order" && request.method === "PUT") {
+    let body: { order?: unknown };
+    try {
+      body = await request.json<{ order?: unknown }>();
+    } catch {
+      return err("Invalid JSON", 400, origin);
+    }
+    const order = body.order;
+    if (!Array.isArray(order) || order.some((id) => typeof id !== "string")) {
+      return err("order must be an array of group IDs", 400, origin);
+    }
+
+    // Only reorder groups the user actually belongs to; ignore any foreign IDs
+    const memberRows = await env.DB.prepare(
+      "SELECT group_id FROM group_members WHERE user_id = ?"
+    ).bind(auth.userId).all<{ group_id: string }>();
+    const memberIds = new Set(memberRows.results.map((r) => r.group_id));
+
+    const ordered = (order as string[]).filter((id) => memberIds.has(id));
+    if (ordered.length === 0) return json({ success: true }, 200, origin);
+
+    await env.DB.batch(
+      ordered.map((groupId, i) =>
+        env.DB.prepare("UPDATE group_members SET sort_order = ? WHERE user_id = ? AND group_id = ?")
+          .bind(i, auth.userId, groupId)
+      )
+    );
+
+    return json({ success: true }, 200, origin);
   }
 
   // GET /api/groups/:id

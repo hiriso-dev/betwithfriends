@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS group_members (
   pseudo TEXT NOT NULL,
   is_admin INTEGER DEFAULT 0,
   total_points REAL DEFAULT 0,
+  sort_order INTEGER,
   joined_at INTEGER DEFAULT (unixepoch()),
   UNIQUE(group_id, user_id),
   UNIQUE(group_id, pseudo)
