@@ -255,7 +255,7 @@ function BetHistoryContent() {
                     {item.double_up === 1 && (
                       <span className="rounded bg-accent/15 px-1 text-[9px] font-bold text-accent">×2</span>
                     )}
-                    {isFinished && actualScoreDisplay.inline && (
+                    {isFinished && !actualScoreDisplay.pending && actualScoreDisplay.inline && (
                       <span className="text-muted ml-1">
                         (actual: {actualScoreDisplay.inline})
                       </span>

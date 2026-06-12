@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
-import { getMatchScoreDisplay } from "@/lib/match-score";
+import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
   id: string;
@@ -217,7 +217,7 @@ export default function MatchCard({
   const resultColor = { exact: "text-success", result: "text-warning", wrong: "text-danger", null: "text-muted" }[betResult ?? "null"];
   const resultLabel = { exact: "⭐ Exact!", result: "✓ Correct result", wrong: "✗ Wrong", null: "" }[betResult ?? "null"];
   const scoreDisplay = getMatchScoreDisplay(match);
-  const primaryScore = scoreDisplay.primary ?? `${match.home_score ?? 0} – ${match.away_score ?? 0}`;
+  const primaryScore = scoreDisplay.primary ?? PENDING_SCORE;
 
   return (
     <div className={`rounded-2xl border bg-surface transition ${
