@@ -80,14 +80,82 @@ export async function handleAdmin(
     return json({ ok: true, summary }, 200, origin);
   }
 
-  // GET /api/admin/notification-debug?match_id=&user_id=
-  // Read-only: reports, for a user + match, the state of every pre-game reminder
+  // GET /api/admin/notification-debug?match_id=&user_id=&type=
+  // Read-only: reports, for a user + match, the state of every notification
   // precondition and the resulting eligibility. Sends nothing, writes nothing.
+  // `type` selects which notification to diagnose: `pre_game` (default) or `result`.
   if (pathname === "/api/admin/notification-debug" && request.method === "GET") {
     const matchId = url.searchParams.get("match_id");
     if (!matchId) return err("match_id is required", 400, origin);
     const userId = url.searchParams.get("user_id") ?? auth.userId;
+    const type = url.searchParams.get("type") ?? "pre_game";
 
+    // type=result — diagnose the end-of-game result notification path
+    // (sendMatchResultNotifications). Result notifications default ON: a missing
+    // notification_prefs row is treated as opted-in, matching delivery behavior.
+    if (type === "result") {
+      const match = await env.DB.prepare(
+        "SELECT id, status, home_score, away_score FROM matches WHERE id = ?"
+      ).bind(matchId).first<{ id: string; status: string; home_score: number | null; away_score: number | null }>();
+      if (!match) return err("Match not found", 404, origin);
+
+      const matchFinished = match.status === "finished";
+      const hasScores = match.home_score !== null && match.away_score !== null;
+
+      const sub = await env.DB.prepare(
+        "SELECT 1 FROM push_subscriptions WHERE user_id = ? LIMIT 1"
+      ).bind(userId).first();
+      const hasPushSubscription = sub !== null;
+
+      const prefs = await env.DB.prepare(
+        "SELECT result_after_game FROM notification_prefs WHERE user_id = ?"
+      ).bind(userId).first<{ result_after_game: number }>();
+      const resultAfterGame = prefs ? prefs.result_after_game === 1 : true; // default on
+
+      const betStats = await env.DB.prepare(
+        "SELECT COUNT(*) AS total, COUNT(points_earned) AS scored FROM bets WHERE user_id = ? AND match_id = ?"
+      ).bind(userId, matchId).first<{ total: number; scored: number }>();
+      const betCount = betStats?.total ?? 0;
+      const scoredCount = betStats?.scored ?? 0;
+      const hasBet = betCount > 0;
+      const allBetsScored = betCount > 0 && scoredCount === betCount;
+
+      const delivered = await env.DB.prepare(
+        "SELECT 1 FROM notification_deliveries WHERE user_id = ? AND match_id = ? AND delivery_type = 'result' LIMIT 1"
+      ).bind(userId, matchId).first();
+      const alreadyDeliveredResult = delivered !== null;
+
+      const blockingReasons: string[] = [];
+      if (!matchFinished) blockingReasons.push("match_not_finished");
+      if (!hasScores) blockingReasons.push("no_scores");
+      if (!hasPushSubscription) blockingReasons.push("no_push_subscription");
+      if (!resultAfterGame) blockingReasons.push("result_pref_off");
+      if (!hasBet) blockingReasons.push("no_bet");
+      else if (!allBetsScored) blockingReasons.push("bets_not_scored");
+      if (alreadyDeliveredResult) blockingReasons.push("already_delivered");
+
+      return json({
+        type: "result",
+        match: {
+          id: match.id,
+          status: match.status,
+          finished: matchFinished,
+          has_scores: hasScores,
+        },
+        user: {
+          user_id: userId,
+          has_push_subscription: hasPushSubscription,
+          result_after_game: resultAfterGame,
+          bet_count: betCount,
+          all_bets_scored: allBetsScored,
+          already_delivered_result: alreadyDeliveredResult,
+        },
+        eligible_now: blockingReasons.length === 0,
+        blocking_reasons: blockingReasons,
+      }, 200, origin);
+    }
+
+    // type=pre_game (default) — diagnose the pre-game reminder path
     const match = await env.DB.prepare(
       "SELECT id, status, match_date, reminders_done FROM matches WHERE id = ?"
     ).bind(matchId).first<{ id: string; status: string; match_date: number; reminders_done: number }>();

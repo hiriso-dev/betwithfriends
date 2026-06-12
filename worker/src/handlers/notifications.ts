@@ -26,6 +26,17 @@ export async function handleNotifications(
       ON CONFLICT(endpoint) DO UPDATE SET subscription_json = excluded.subscription_json, user_id = excluded.user_id
     `).bind(crypto.randomUUID(), auth.userId, sub.endpoint, JSON.stringify(sub)).run();
 
+    // Keep a single subscription per user — the latest device wins. iOS PWAs can
+    // leave a "zombie" Apple subscription after a reinstall: the old endpoint keeps
+    // returning 2xx (so it is never pruned by the 410 path) but never displays the
+    // notification. With per-user delivery dedup, that dead endpoint can swallow the
+    // push and the user receives nothing. Dropping the user's other endpoints on each
+    // (re)subscribe — which the app does on every app open — keeps cron notifications
+    // pointed at the live device.
+    await env.DB.prepare(
+      "DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint != ?"
+    ).bind(auth.userId, sub.endpoint).run();
+
     // Ensure notification prefs row exists
     await env.DB.prepare(`
       INSERT OR IGNORE INTO notification_prefs (user_id) VALUES (?)

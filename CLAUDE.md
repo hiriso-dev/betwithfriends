@@ -114,7 +114,7 @@ Auth pages: `app/(auth)/login/` — email+password, toggle between sign-in and r
 | `special-bets.ts` | `GET/POST /api/special-bets?group_id=` |
 | `notifications.ts` | `POST /api/push/subscribe`, `DELETE /api/push/unsubscribe`, `GET/PUT /api/push/prefs` |
 | `standings.ts` | `GET /api/standings?group_id=`, `GET /api/scorers` |
-| `admin.ts` | (admin email only) `POST /api/admin/sync`, `POST /api/admin/resolve-special`, `GET /api/admin/notification-debug?match_id=&user_id=` — read-only per-precondition diagnosis of why a user did/didn't get a pre-game reminder |
+| `admin.ts` | (admin email only) `POST /api/admin/sync`, `POST /api/admin/resolve-special`, `GET /api/admin/notification-debug?match_id=&user_id=&type=` — read-only per-precondition diagnosis of why a user did/didn't get a notification. `type=pre_game` (default) diagnoses the pre-game reminder; `type=result` diagnoses the end-of-game result notification (finished+scored, push sub, `result_after_game` pref **defaulting ON when no row**, has bet, all bets scored, not already delivered) |
 
 Dev-only (no `FOOTBALL_DATA_API_KEY`): `POST /api/dev/score-match` — manually trigger scoring for a match.
 

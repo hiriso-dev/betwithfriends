@@ -402,8 +402,9 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
       MIN(b.away_score_pred) AS sample_away_score_pred,
       MIN(b.confidence) AS sample_confidence
     FROM push_subscriptions ps
-    JOIN notification_prefs np ON np.user_id = ps.user_id AND np.result_after_game = 1
     JOIN bets b ON b.user_id = ps.user_id AND b.match_id = ?
+    LEFT JOIN notification_prefs np ON np.user_id = ps.user_id
+    WHERE COALESCE(np.result_after_game, 1) = 1
     GROUP BY ps.user_id, ps.subscription_json
     HAVING COUNT(b.id) > 0 AND COUNT(b.points_earned) = COUNT(b.id)
   `).bind(match.id).all<{
