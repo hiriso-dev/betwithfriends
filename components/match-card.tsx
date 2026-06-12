@@ -114,6 +114,10 @@ export default function MatchCard({
   const isLocked = secondsLeft <= 0 || match.status !== "scheduled";
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
+  // Once kickoff has passed the bet is locked, so the group's predictions are
+  // revealed via the 👁 control — even while status is still `scheduled`
+  // (score sync only flips it to `live` ~105 min after kickoff).
+  const betsRevealed = secondsLeft <= 0 || isLive || isFinished;
 
   const hasBet = !!match.my_bet;
   const canBet = !!groupId && !isLocked && !isFinished && !isLive;
@@ -381,7 +385,7 @@ export default function MatchCard({
             </button>
 
             <div className="flex items-center gap-2 min-w-[80px] justify-center">
-              {isFinished || isLive ? (
+              {betsRevealed ? (
                 <button
                   type="button"
                   onClick={(e) => {
