@@ -12,14 +12,23 @@ type RankingMember = {
   recent_points: number;
   is_me: boolean;
 };
-type RankingsResponse = { members: RankingMember[]; last_match_day: string | null };
+type LastMatch = {
+  home_team: string;
+  away_team: string;
+  home_team_code: string | null;
+  away_team_code: string | null;
+  home_score: number | null;
+  away_score: number | null;
+  match_date: number;
+};
+type RankingsResponse = { members: RankingMember[]; last_match: LastMatch | null };
 
 export default function RankingsPage() {
   const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [members, setMembers] = useState<RankingMember[]>([]);
-  const [lastMatchDay, setLastMatchDay] = useState<string | null>(null);
+  const [lastMatch, setLastMatch] = useState<LastMatch | null>(null);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [loadingRanking, setLoadingRanking] = useState(false);
 
@@ -38,7 +47,7 @@ export default function RankingsPage() {
     apiFetch<RankingsResponse>(`/api/groups/${groupId}/rankings`)
       .then(res => {
         setMembers(res.members);
-        setLastMatchDay(res.last_match_day);
+        setLastMatch(res.last_match);
       })
       .catch(() => {})
       .finally(() => setLoadingRanking(false));
@@ -57,16 +66,16 @@ export default function RankingsPage() {
     );
   }
 
-  const lastDayLabel = lastMatchDay
-    ? new Date(lastMatchDay).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  const lastMatchLabel = lastMatch
+    ? `${lastMatch.home_team_code ?? lastMatch.home_team} ${lastMatch.home_score ?? 0}–${lastMatch.away_score ?? 0} ${lastMatch.away_team_code ?? lastMatch.away_team}`
     : null;
 
   return (
     <div className="mx-auto max-w-lg lg:max-w-2xl px-4 pt-4 pb-4">
       <div className="mb-4">
         <h1 className="text-xl font-bold">Rankings</h1>
-        {lastDayLabel && (
-          <p className="text-sm text-muted mt-0.5">Points change from {lastDayLabel}</p>
+        {lastMatchLabel && (
+          <p className="text-sm text-muted mt-0.5">Points from last match · {lastMatchLabel}</p>
         )}
       </div>
 
@@ -105,7 +114,7 @@ export default function RankingsPage() {
             <div className="rounded-2xl border border-border bg-surface overflow-hidden">
               {members.map((m) => {
                 const recent = m.recent_points;
-                const hasRecent = lastMatchDay !== null;
+                const hasRecent = lastMatch !== null;
                 const recentColor = recent > 0 ? "text-success" : recent < 0 ? "text-danger" : "text-muted";
                 const recentLabel = recent > 0 ? `+${recent % 1 === 0 ? recent : recent.toFixed(1)}` : recent < 0 ? (recent % 1 === 0 ? String(recent) : recent.toFixed(1)) : "—";
                 const medal = m.rank === 1 ? "🥇" : m.rank === 2 ? "🥈" : m.rank === 3 ? "🥉" : null;

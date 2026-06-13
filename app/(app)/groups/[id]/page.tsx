@@ -37,7 +37,7 @@ export default function GroupDetailPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<GroupDetail>(`/api/groups/${params.id}`),
-      apiFetch<{ members: Member[]; last_match_day: string | null }>(`/api/groups/${params.id}/rankings`),
+      apiFetch<{ members: Member[]; last_match: unknown }>(`/api/groups/${params.id}/rankings`),
     ]).then(([g, rankings]) => {
       setGroup(g);
       setMembers(rankings.members);

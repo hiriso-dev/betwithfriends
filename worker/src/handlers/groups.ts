@@ -176,33 +176,39 @@ export async function handleGroups(
       .bind(groupId, auth.userId).first();
     if (!member) return err("Not a member", 403, origin);
 
+    // The single most recently played match (latest kickoff among finished
+    // matches). The +/- column reflects points earned on this one match only.
+    const lastMatch = await env.DB.prepare(`
+      SELECT id, home_team, away_team, home_team_code, away_team_code,
+             home_score, away_score, match_date
+      FROM matches
+      WHERE status = 'finished'
+      ORDER BY match_date DESC
+      LIMIT 1
+    `).first<{
+      id: string; home_team: string; away_team: string;
+      home_team_code: string | null; away_team_code: string | null;
+      home_score: number | null; away_score: number | null; match_date: number;
+    }>();
+
     const rows = await env.DB.prepare(`
       SELECT gm.user_id, gm.pseudo, gm.total_points,
              ROW_NUMBER() OVER (ORDER BY gm.total_points DESC) as rank,
              COALESCE((
                SELECT SUM(b.points_earned)
                FROM bets b
-               JOIN matches m ON m.id = b.match_id
                WHERE b.group_id = gm.group_id
                  AND b.user_id = gm.user_id
+                 AND b.match_id = ?
                  AND b.points_earned IS NOT NULL
-                 AND date(m.match_date, 'unixepoch') = (
-                   SELECT date(MAX(match_date), 'unixepoch')
-                   FROM matches
-                   WHERE status = 'finished'
-                 )
              ), 0) as recent_points
       FROM group_members gm
       WHERE gm.group_id = ?
       ORDER BY gm.total_points DESC
-    `).bind(groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number }>();
-
-    const lastDay = await env.DB.prepare(
-      "SELECT date(MAX(match_date), 'unixepoch') as day FROM matches WHERE status = 'finished'"
-    ).first<{ day: string | null }>();
+    `).bind(lastMatch?.id ?? null, groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number }>();
 
     const result = rows.results.map((r) => ({ ...r, is_me: r.user_id === auth.userId }));
-    return json({ members: result, last_match_day: lastDay?.day ?? null }, 200, origin);
+    return json({ members: result, last_match: lastMatch ?? null }, 200, origin);
   }
 
   return err("Not found", 404, origin);
