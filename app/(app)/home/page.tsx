@@ -261,7 +261,7 @@ export default function HomePage() {
                   ) : featured ? (
                     <>
                       <p className="text-sm lg:text-base font-semibold">{featured.home_team} vs {featured.away_team}</p>
-                      <p className="text-xs text-muted">{featured.group_name ? `Group ${featured.group_name}` : featured.stage} · Bet now →</p>
+                      <p className="text-xs font-semibold text-accent">Click to bet →</p>
                     </>
                   ) : null}
                 </div>
