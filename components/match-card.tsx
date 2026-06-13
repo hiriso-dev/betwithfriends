@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
+import { UsersIcon } from "@/components/icons";
 import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
@@ -115,7 +116,7 @@ export default function MatchCard({
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   // Once kickoff has passed the bet is locked, so the group's predictions are
-  // revealed via the 👁 control — even while status is still `scheduled`
+  // revealed via the players control — even while status is still `scheduled`
   // (score sync only flips it to `live` ~105 min after kickoff).
   const betsRevealed = secondsLeft <= 0 || isLive || isFinished;
 
@@ -402,7 +403,7 @@ export default function MatchCard({
                         <span className="mt-1 text-[10px] font-medium text-muted">{scoreDisplay.secondary}</span>
                       )}
                     </span>
-                  <span className="text-base text-muted">👁</span>
+                  <UsersIcon size={16} className="text-muted" />
                 </button>
               ) : (
                 <span className="rounded-lg border border-dashed border-border px-4 py-1 text-sm text-muted">vs</span>

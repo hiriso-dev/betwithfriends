@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
+import { UsersIcon } from "@/components/icons";
 import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
@@ -230,7 +231,7 @@ export default function HomePage() {
                       <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
                       <p className="text-[10px] text-muted uppercase tracking-wider">{m.away_team_code}</p>
                     </div>
-                    <span className="shrink-0 text-base text-muted">👁</span>
+                    <UsersIcon size={18} className="shrink-0 text-muted" />
                   </button>
                 );
               })}
@@ -265,6 +266,46 @@ export default function HomePage() {
                   ) : null}
                 </div>
               </div>
+            </button>
+          )}
+
+          {/* Next game — soonest upcoming kickoff with a live countdown.
+              Hidden while a match is live (the "Live now" section takes over). */}
+          {nextMatch && liveMatches.length === 0 && (
+            <button
+              onClick={() => router.push(`/fixtures?bet=${nextMatch.id}`)}
+              className="w-full rounded-2xl border border-border bg-surface p-4 lg:p-6 text-left transition active:bg-surface-hover hover:border-accent/40"
+            >
+              <div className="mb-3 lg:mb-4 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted">🗓 Next game</p>
+                <p className="text-xs text-muted">
+                  {new Date(nextMatch.match_date * 1000).toLocaleString("en-US", {
+                    weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                  })}
+                </p>
+              </div>
+              <div className="mb-3 lg:mb-4 flex items-center justify-between gap-2 lg:gap-6">
+                <div className="flex-1 text-right">
+                  <p className="font-bold lg:text-xl">{nextMatch.home_team} <Flag code={nextMatch.home_team_code} /></p>
+                  <p className="text-xs text-muted uppercase">{nextMatch.home_team_code}</p>
+                </div>
+                <span className="mx-2 text-sm lg:text-base font-bold text-muted">vs</span>
+                <div className="flex-1 text-left">
+                  <p className="font-bold lg:text-xl"><Flag code={nextMatch.away_team_code} /> {nextMatch.away_team}</p>
+                  <p className="text-xs text-muted uppercase">{nextMatch.away_team_code}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-surface-hover px-4 py-2.5 text-center">
+                <p className="text-[10px] uppercase tracking-widest text-muted mb-0.5">Kicks off in</p>
+                <p className="font-black text-xl lg:text-2xl tabular-nums">{fmtCountdown(nextMatch.match_date * 1000 - tick)}</p>
+              </div>
+              <p className="mt-3 text-center text-xs text-muted">
+                {nextMatch.my_bet ? (
+                  <>✓ Your bet: <span className="font-semibold text-foreground">{nextMatch.my_bet.home_score_pred}–{nextMatch.my_bet.away_score_pred}</span></>
+                ) : (
+                  <span className="font-semibold text-accent">Place your bet →</span>
+                )}
+              </p>
             </button>
           )}
 
@@ -308,7 +349,7 @@ export default function HomePage() {
                         <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
                       </div>
                     )}
-                    <span className="shrink-0 text-base text-muted">👁</span>
+                    <UsersIcon size={18} className="shrink-0 text-muted" />
                   </button>
                 );
               })}
