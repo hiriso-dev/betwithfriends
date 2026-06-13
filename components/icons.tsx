@@ -16,16 +16,19 @@ const base = (size: number, className: string) => ({
 });
 
 /**
- * Two people — used on match scores/rows to mean "see the other players'
- * predictions for this match". Clearer (and friendlier) than an eye.
+ * Binoculars — used on match scores/rows to mean "take a look at the other
+ * players' predictions for this match". Reads as "view" without the
+ * surveillance vibe of a single eye.
  */
-export function UsersIcon({ size = 18, className = "" }: IconProps) {
+export function BinocularsIcon({ size = 18, className = "" }: IconProps) {
   return (
     <svg {...base(size, className)} aria-hidden="true">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      <path d="M10 10h4" />
+      <path d="M19 7V4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v3" />
+      <path d="M20 21a2 2 0 0 0 2-2v-3.851c0-1.39-2-2.962-2-4.829V8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2z" />
+      <path d="M22 16H2" />
+      <path d="M4 21a2 2 0 0 1-2-2v-3.851c0-1.39 2-2.962 2-4.829V8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2z" />
+      <path d="M9 7V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3" />
     </svg>
   );
 }

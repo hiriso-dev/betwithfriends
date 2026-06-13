@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Flag } from "@/components/flag";
-import { UsersIcon } from "@/components/icons";
+import { BinocularsIcon } from "@/components/icons";
 import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
@@ -394,7 +394,7 @@ export default function MatchCard({
                     const params = groupId ? `?group_id=${groupId}` : "";
                     router.push(`/matches/${match.id}/bets${params}`);
                   }}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 transition active:bg-surface-hover"
+                    className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 transition active:bg-surface-hover hover:border-accent/50"
                   title="See everyone's bets"
                 >
                     <span className="flex flex-col items-center leading-none">
@@ -403,7 +403,10 @@ export default function MatchCard({
                         <span className="mt-1 text-[10px] font-medium text-muted">{scoreDisplay.secondary}</span>
                       )}
                     </span>
-                  <UsersIcon size={16} className="text-muted" />
+                  <span className="flex flex-col items-center leading-none text-accent">
+                    <BinocularsIcon size={16} />
+                    <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide">Bets</span>
+                  </span>
                 </button>
               ) : (
                 <span className="rounded-lg border border-dashed border-border px-4 py-1 text-sm text-muted">vs</span>

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
-import { UsersIcon } from "@/components/icons";
+import { BinocularsIcon } from "@/components/icons";
 import { getMatchScoreDisplay, PENDING_SCORE } from "@/lib/match-score";
 
 type Match = {
@@ -231,7 +231,10 @@ export default function HomePage() {
                       <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
                       <p className="text-[10px] text-muted uppercase tracking-wider">{m.away_team_code}</p>
                     </div>
-                    <UsersIcon size={18} className="shrink-0 text-muted" />
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-accent">
+                      <BinocularsIcon size={13} />
+                      Bets
+                    </span>
                   </button>
                 );
               })}
@@ -349,7 +352,10 @@ export default function HomePage() {
                         <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
                       </div>
                     )}
-                    <UsersIcon size={18} className="shrink-0 text-muted" />
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-accent">
+                      <BinocularsIcon size={13} />
+                      Bets
+                    </span>
                   </button>
                 );
               })}
