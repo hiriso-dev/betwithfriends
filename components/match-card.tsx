@@ -224,7 +224,7 @@ export default function MatchCard({
   const primaryScore = scoreDisplay.primary ?? PENDING_SCORE;
 
   return (
-    <div className={`rounded-2xl border bg-surface transition ${
+    <div id={`match-${match.id}`} className={`scroll-mt-24 rounded-2xl border bg-surface transition ${
       isLive ? "border-success/50 shadow-[0_0_20px_rgba(34,197,94,0.1)]" : "border-border"
     } p-4`}>
 

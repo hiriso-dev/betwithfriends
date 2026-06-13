@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import MatchCard from "@/components/match-card";
 import { HelpDialog, useHelpDialog } from "@/components/help-dialog";
@@ -108,6 +108,26 @@ export default function FixturesPage() {
     if (loading) return;
     loadMatches(bettingGroupId).then(setAllMatches).catch(() => {});
   }, [bettingGroupId, loadMatches, loading]);
+
+  // Deep-link from the home countdown: /fixtures?bet=<matchId> scrolls the
+  // matching card into view and briefly highlights it so the user can bet.
+  // The default "coming" view already renders scheduled matches, so no view
+  // switch is needed. A ref guards against re-scrolling on the 30s poll.
+  const scrolledToBetRef = useRef(false);
+  useEffect(() => {
+    if (loading || scrolledToBetRef.current || allMatches.length === 0) return;
+    const betId = new URLSearchParams(window.location.search).get("bet");
+    if (!betId) return;
+    scrolledToBetRef.current = true;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`match-${betId}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ring-2", "ring-accent");
+      setTimeout(() => el.classList.remove("ring-2", "ring-accent"), 2200);
+    });
+    window.history.replaceState(null, "", "/fixtures");
+  }, [loading, allMatches]);
 
   if (loading) {
     return (

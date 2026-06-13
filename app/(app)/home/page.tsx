@@ -37,7 +37,6 @@ export default function HomePage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [specialBets, setSpecialBets] = useState<SpecialBet[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
-  const [betTarget, setBetTarget] = useState<Match | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(() => Date.now());
@@ -241,13 +240,17 @@ export default function HomePage() {
           {/* Countdown to next bet close */}
           {groups.length > 0 && nextDeadlineMs < Infinity && msUntilClose > 0 && (
             <button
-              onClick={() => isSpecialDeadline ? router.push("/special") : featured && setBetTarget(featured)}
+              onClick={() => {
+                if (isSpecialDeadline) { router.push("/special"); return; }
+                const id = nextUnbet?.id ?? featured?.id;
+                router.push(id ? `/fixtures?bet=${id}` : "/fixtures");
+              }}
               className="w-full rounded-2xl border border-accent/40 bg-surface px-4 py-3 lg:px-6 lg:py-5 text-left transition active:bg-surface-hover hover:border-accent/60"
             >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest text-accent mb-0.5">
-                    {isSpecialDeadline ? "⭐ Special bets close in" : "🔒 Next bet locks in"}
+                    {isSpecialDeadline ? "⭐ Special bets close in" : "🔒 Not yet bet · locks in"}
                   </p>
                   <p className="font-black text-xl lg:text-3xl tabular-nums">{fmtCountdown(msUntilClose)}</p>
                 </div>
@@ -263,54 +266,6 @@ export default function HomePage() {
                 </div>
               </div>
             </button>
-          )}
-
-          {/* Next bet CTA */}
-          {featured ? (
-            <div className="rounded-2xl border border-border bg-surface p-4 lg:p-6">
-              <p className="mb-2 lg:mb-4 text-xs font-semibold uppercase tracking-widest text-muted">
-                {nextUnbet ? "⚡ Next bet to place" : "🗓 Next match"}
-              </p>
-              <div className="mb-3 lg:mb-5 flex items-center justify-between gap-2 lg:gap-6">
-                <div className="flex-1 text-right">
-                  <p className="font-bold lg:text-xl">{featured.home_team} <Flag code={featured.home_team_code} /></p>
-                  <p className="text-xs text-muted uppercase">{featured.home_team_code}</p>
-                </div>
-                <span className="mx-2 text-sm lg:text-base font-bold text-muted">vs</span>
-                <div className="flex-1 text-left">
-                  <p className="font-bold lg:text-xl"><Flag code={featured.away_team_code} /> {featured.away_team}</p>
-                  <p className="text-xs text-muted uppercase">{featured.away_team_code}</p>
-                </div>
-              </div>
-              <p className="mb-1 text-center text-xs text-muted">
-                {new Date(featured.match_date * 1000).toLocaleString("en-US", {
-                  weekday: "short", month: "short", day: "numeric",
-                  hour: "2-digit", minute: "2-digit", timeZoneName: "short",
-                })}
-              </p>
-              {featured.group_name && (
-                <p className="mb-3 lg:mb-5 text-center text-[10px] lg:text-xs text-muted">Group {featured.group_name}{featured.stadium ? ` · ${featured.stadium}` : ""}</p>
-              )}
-
-              {nextUnbet && featured.my_bet === undefined ? (
-                <button
-                  onClick={() => setBetTarget(featured)}
-                  className="w-full rounded-xl bg-accent py-3 font-bold text-[#0f0f23] transition active:scale-95 hover:bg-accent/90"
-                >
-                  Place bet →
-                </button>
-              ) : featured.my_bet ? (
-                <div className="text-center text-sm text-muted">
-                  ✓ Bet placed: <span className="font-semibold text-foreground">
-                    {featured.my_bet.home_score_pred} – {featured.my_bet.away_score_pred}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border bg-surface p-8 text-center text-muted text-sm">
-              No upcoming matches
-            </div>
           )}
 
           {/* Recent results — shown in main column on desktop */}
@@ -415,191 +370,6 @@ export default function HomePage() {
           )}
         </div>
       </div>
-
-      {/* Match bet sheet */}
-      {betTarget && (() => {
-        const doubleUpsUsed = matches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
-        return (
-          <BetSheet
-            match={betTarget}
-            groupId={selectedGroup || groups[0]?.id}
-            doubleUpsUsed={doubleUpsUsed}
-            onClose={() => setBetTarget(null)}
-            onSaved={() => {
-              setBetTarget(null);
-              apiFetch<Match[]>(`/api/matches?group_id=${selectedGroup}`).then(setMatches).catch(() => {});
-            }}
-          />
-        );
-      })()}
-    </div>
-  );
-}
-
-
-const CONFIDENCE_OPTIONS = [
-  { value: null,        label: "None",     emoji: "—",  pts: { correct: 0, wrong: 0 } },
-  { value: "cautious",  label: "Cautious", emoji: "😬", pts: { correct: 2, wrong: -2 } },
-  { value: "confident", label: "Confident",emoji: "👍", pts: { correct: 5, wrong: -5 } },
-  { value: "reckless",  label: "Reckless", emoji: "🔥", pts: { correct: 10, wrong: -10 } },
-];
-
-function BetSheet({ match, groupId, doubleUpsUsed, onClose, onSaved }: {
-  match: Match; groupId: string; doubleUpsUsed: number; onClose: () => void; onSaved: () => void;
-}) {
-  const [home, setHome] = useState(match.my_bet?.home_score_pred ?? 0);
-  const [away, setAway] = useState(match.my_bet?.away_score_pred ?? 0);
-  const [confidence, setConfidence] = useState<string | null>(match.my_bet?.confidence ?? null);
-  const [doubleUp, setDoubleUp] = useState(match.my_bet?.double_up === 1);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [minutesLeft, setMinutesLeft] = useState(() => Math.floor((match.match_date * 1000 - Date.now()) / 60000));
-  useEffect(() => {
-    const t = setInterval(() => {
-      setMinutesLeft(Math.floor((match.match_date * 1000 - Date.now()) / 60000));
-    }, 10000);
-    return () => clearInterval(t);
-  }, [match.match_date]);
-  const locked = minutesLeft <= 0 || match.status !== "scheduled";
-
-  const alreadyDoubleUp = match.my_bet?.double_up === 1;
-  const doubleUpsRemaining = 2 - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
-
-  const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
-  let previewCorrect = 10 + c.pts.correct;
-  const previewWrong = c.pts.wrong;
-  if (doubleUp && previewCorrect > 0) previewCorrect *= 2;
-
-  async function save() {
-    setSaving(true); setError("");
-    try {
-      await apiFetch("/api/bets", {
-        method: "POST",
-        body: JSON.stringify({ match_id: match.id, group_id: groupId, home_score_pred: home, away_score_pred: away, confidence, double_up: doubleUp }),
-      });
-      if (navigator.vibrate) navigator.vibrate(50);
-      onSaved();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally { setSaving(false); }
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-surface p-6 shadow-2xl max-h-[90vh] overflow-y-auto
-                      lg:inset-auto lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:-translate-y-1/2
-                      lg:w-[28rem] lg:max-w-[90vw] lg:rounded-3xl lg:border lg:border-border">
-        <div className="mb-1 h-1 w-12 rounded-full bg-border mx-auto lg:hidden" />
-        <div className="mb-4 mt-3 text-center">
-          <h3 className="text-lg font-bold"><Flag code={match.home_team_code} /> {match.home_team} vs {match.away_team} <Flag code={match.away_team_code} /></h3>
-          <p className="mt-1 text-xs text-muted">
-            {new Date(match.match_date * 1000).toLocaleString("en-US", {
-              weekday: "short", month: "short", day: "numeric",
-              hour: "2-digit", minute: "2-digit", timeZoneName: "short",
-            })}
-          </p>
-          {!locked && minutesLeft < 60 && <p className="mt-1 text-xs text-warning">⚡ Locks in {minutesLeft}m</p>}
-        </div>
-
-        <div className="mb-6 flex items-center justify-center gap-6">
-          <ScoreInput label={match.home_team} value={home} onChange={setHome} disabled={locked} />
-          <span className="text-2xl font-bold text-muted">-</span>
-          <ScoreInput label={match.away_team} value={away} onChange={setAway} disabled={locked} />
-        </div>
-
-        <div className="mb-4 rounded-xl border border-warning/20 bg-warning/10 px-3 py-2 text-center text-[11px] leading-relaxed text-muted">
-          Score is taken at the end of <strong className="text-foreground">regular time only</strong>.
-          <strong className="text-foreground"> Extra time and penalties do not count</strong>.
-        </div>
-
-        {/* Confidence */}
-        <div className="mb-4">
-          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence <span className="normal-case font-normal opacity-70">— optional</span></p>
-          <div className="grid grid-cols-4 gap-2">
-            {CONFIDENCE_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                disabled={locked}
-                onClick={() => setConfidence(opt.value)}
-                className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition ${
-                  confidence === opt.value ? "border-accent bg-accent/10 text-accent" : "border-border bg-surface-hover text-muted"
-                } disabled:opacity-40`}
-              >
-                <span className="text-lg leading-none">{opt.emoji}</span>
-                <span className="font-medium">{opt.label}</span>
-                {opt.value && <span className="text-[10px] opacity-70">+{opt.pts.correct}/{opt.pts.wrong}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Double Up */}
-        <div className="mb-4">
-          <button
-            disabled={locked || (!doubleUp && doubleUpsRemaining <= 0)}
-            onClick={() => setDoubleUp(v => !v)}
-            className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition ${
-              doubleUp ? "border-accent bg-accent/10" : "border-border bg-surface-hover"
-            } disabled:opacity-40`}
-          >
-            <div className="text-left">
-              <p className={`font-semibold text-sm ${doubleUp ? "text-accent" : "text-foreground"}`}>🎲 Double Up</p>
-              <p className="text-[10px] text-muted">Optional · ×2 points if total is positive</p>
-            </div>
-            <p className={`text-xs font-medium ${doubleUp ? "text-accent" : "text-muted"}`}>{doubleUpsRemaining} remaining</p>
-          </button>
-        </div>
-
-        {/* Preview */}
-        <div className="mb-5 flex gap-2 text-xs">
-          <div className="flex-1 rounded-xl bg-success/10 border border-success/20 p-3 text-center">
-            <p className="text-muted mb-0.5">If correct</p>
-            <p className="font-bold text-success text-base">+{previewCorrect} pts</p>
-            <p className="text-[10px] text-muted">+{doubleUp ? previewCorrect + 10 : previewCorrect + 5} if exact</p>
-          </div>
-          <div className="flex-1 rounded-xl bg-danger/10 border border-danger/20 p-3 text-center">
-            <p className="text-muted mb-0.5">If wrong</p>
-            <p className={`font-bold text-base ${previewWrong < 0 ? "text-danger" : "text-muted"}`}>
-              {previewWrong < 0 ? previewWrong : "0"} pts
-            </p>
-            <p className="text-[10px] text-muted">{previewWrong < 0 ? "confidence penalty" : "no penalty"}</p>
-          </div>
-        </div>
-
-        {error && <p className="mb-3 text-center text-sm text-danger">{error}</p>}
-        <button onClick={save} disabled={saving || locked} className="w-full rounded-xl bg-accent py-4 font-bold text-[#0f0f23] transition active:scale-95 disabled:opacity-50">
-          {saving ? "Saving…" : locked ? "Locked" : "Save bet"}
-        </button>
-      </div>
-    </>
-  );
-}
-
-function ScoreInput({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <p className="text-xs text-muted max-w-[80px] truncate text-center">{label}</p>
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(20, value + 1))}
-        disabled={disabled}
-        className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-accent/50 bg-surface-hover text-4xl font-black tabular-nums transition active:scale-95 active:border-accent active:bg-accent/10 disabled:opacity-40 select-none"
-      >
-        {value}
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(0, value - 1))}
-        disabled={disabled || value === 0}
-        className={`flex h-7 w-16 items-center justify-center rounded-lg border font-bold text-base transition active:scale-95 ${
-          value > 0 && !disabled
-            ? "border-border bg-surface-hover text-foreground active:border-accent active:text-accent"
-            : "border-transparent opacity-0 pointer-events-none"
-        }`}
-      >
-        −
-      </button>
     </div>
   );
 }
