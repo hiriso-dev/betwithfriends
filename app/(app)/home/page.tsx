@@ -335,7 +335,12 @@ export default function HomePage() {
                   : null;
                 const color = betResult === "exact" ? "text-success" : betResult === "result" ? "text-warning" : betResult === "wrong" ? "text-danger" : "text-muted";
                 return (
-                  <div key={m.id} className="flex items-center justify-between px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0">
+                  <button
+                    key={m.id}
+                    onClick={() => router.push(`/matches/${m.id}/bets${selectedGroup ? `?group_id=${selectedGroup}` : ""}`)}
+                    title="See everyone's bets"
+                    className="w-full flex items-center gap-3 px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
+                  >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {scoreDisplay.inline} <Flag code={m.away_team_code} /> {m.away_team}</p>
                       <p className="text-[10px] text-muted">Group {m.group_name}</p>
@@ -348,7 +353,8 @@ export default function HomePage() {
                         <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
                       </div>
                     )}
-                  </div>
+                    <span className="shrink-0 text-base text-muted">👁</span>
+                  </button>
                 );
               })}
             </div>
