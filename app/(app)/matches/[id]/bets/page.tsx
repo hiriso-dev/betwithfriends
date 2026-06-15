@@ -163,7 +163,16 @@ function MatchBetsContent() {
     const placed = bets.filter(b => b.home_score_pred !== null);
     const empty = bets.filter(b => b.home_score_pred === null);
     if (isFinished) {
-      placed.sort((a, b) => (b.points_earned ?? 0) - (a.points_earned ?? 0));
+      // Scored bets rank by points (desc). Bets still awaiting scoring
+      // (points_earned === null) go last — never treated as 0, which would
+      // otherwise float them above players who legitimately lost points.
+      placed.sort((a, b) => {
+        const aScored = a.points_earned !== null;
+        const bScored = b.points_earned !== null;
+        if (aScored !== bScored) return aScored ? -1 : 1;
+        if (aScored && bScored) return b.points_earned! - a.points_earned!;
+        return a.pseudo.localeCompare(b.pseudo);
+      });
     } else {
       placed.sort((a, b) => a.pseudo.localeCompare(b.pseudo));
     }
@@ -276,8 +285,10 @@ function MatchBetsContent() {
                   className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5"
                 >
                   {isFinished && (
-                    <span className={`w-5 text-center text-sm font-bold tabular-nums ${i < 3 ? "text-accent" : "text-muted"}`}>
-                      {i + 1}
+                    <span className={`w-5 text-center text-sm font-bold tabular-nums ${
+                      bet.points_earned === null ? "text-muted" : i < 3 ? "text-accent" : "text-muted"
+                    }`}>
+                      {bet.points_earned === null ? "–" : i + 1}
                     </span>
                   )}
 
@@ -303,14 +314,20 @@ function MatchBetsContent() {
                     </p>
                     {isFinished && (
                       <div className="mt-1 flex items-center justify-end gap-1.5">
-                        {result && <span className={`text-[10px] ${result.color}`}>{result.label}</span>}
-                        {bet.points_earned !== null && (
-                          <span className={`text-xs font-bold ${
-                            bet.points_earned > 0 ? "text-success" :
-                            bet.points_earned < 0 ? "text-danger" : "text-muted"
-                          }`}>
-                            {bet.points_earned > 0 ? "+" : ""}{bet.points_earned.toFixed(1)}
-                          </span>
+                        {bet.points_earned === null ? (
+                          // Match is finished but this bet hasn't been scored yet —
+                          // show a pending state instead of a result with no points.
+                          <span className="text-[10px] text-muted">⏳ Scoring…</span>
+                        ) : (
+                          <>
+                            {result && <span className={`text-[10px] ${result.color}`}>{result.label}</span>}
+                            <span className={`text-xs font-bold ${
+                              bet.points_earned > 0 ? "text-success" :
+                              bet.points_earned < 0 ? "text-danger" : "text-muted"
+                            }`}>
+                              {bet.points_earned > 0 ? "+" : ""}{bet.points_earned.toFixed(1)}
+                            </span>
+                          </>
                         )}
                       </div>
                     )}

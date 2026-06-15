@@ -303,7 +303,7 @@ async function finalizeMatchIfReady(env: Env, matchId: string): Promise<void> {
   await sendMatchResultNotifications(env, match);
 }
 
-async function finalizePendingFinishedMatches(env: Env): Promise<void> {
+export async function finalizePendingFinishedMatches(env: Env): Promise<void> {
   const rows = await env.DB.prepare(
     `SELECT DISTINCT m.id
      FROM matches m

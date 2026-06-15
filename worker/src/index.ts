@@ -9,7 +9,7 @@ import { handleSpecialBets } from "./handlers/special-bets";
 import { handleNotifications } from "./handlers/notifications";
 import { handleStandings } from "./handlers/standings";
 import { handleAdmin } from "./handlers/admin";
-import { syncScores, syncTrackedMatches, syncScorers, hasMatchNeedingScoreSync } from "./services/scores-sync";
+import { syncScores, syncTrackedMatches, syncScorers, hasMatchNeedingScoreSync, finalizePendingFinishedMatches } from "./services/scores-sync";
 import { processMatchResult } from "./services/scoring";
 import {
   sendPreGameReminders,
@@ -201,6 +201,13 @@ const worker = {
     if (await hasMatchNeedingScoreSync(env)) {
       await syncTrackedMatches(env);
       await syncScorers(env);
+
+      // Reconcile any finished match whose bets are still unscored. This is
+      // pure DB work (no football-data API call), so it runs even when
+      // syncTrackedMatches/syncScores early-return for a missing API key —
+      // otherwise a partially-scored match (e.g. seeded/edited bets, or a run
+      // that errored mid-loop) would never get its remaining bets scored.
+      await finalizePendingFinishedMatches(env);
     }
   },
 };
