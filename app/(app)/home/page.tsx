@@ -202,12 +202,15 @@ export default function HomePage() {
           {liveMatches.length > 0 && (
             <div className="rounded-2xl border border-success/40 bg-surface overflow-hidden shadow-[0_0_20px_rgba(34,197,94,0.08)]">
               <div className="px-4 py-3 lg:px-6 lg:py-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-semibold text-sm lg:text-base flex items-center gap-2">
+                <h2 className="font-semibold text-sm lg:text-base flex items-center gap-2 flex-wrap">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
                   </span>
                   Live now
+                  <span className="text-xs font-normal text-muted">
+                    · kicked off at {new Date(liveMatches[0].match_date * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  </span>
                 </h2>
                 <span className="text-[10px] uppercase tracking-widest font-semibold text-success">
                   {liveMatches.length} playing
@@ -222,7 +225,7 @@ export default function HomePage() {
                     key={m.id}
                     onClick={() => router.push(`/matches/${m.id}/bets${selectedGroup ? `?group_id=${selectedGroup}` : ""}`)}
                     title="See everyone's bets"
-                    className="w-full flex flex-col gap-2 px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
+                    className="w-full flex flex-col px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
                   >
                     <div className="flex w-full items-center gap-3">
                       <div className="flex-1 min-w-0 text-right">
@@ -231,9 +234,7 @@ export default function HomePage() {
                       </div>
                       <div className="flex flex-col items-center min-w-[64px]">
                         <span className="text-xl font-black tabular-nums leading-none">{primaryScore}</span>
-                        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-success whitespace-nowrap">
-                          ● Live · {new Date(m.match_date * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
+                        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-success">● Live</span>
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
@@ -244,16 +245,16 @@ export default function HomePage() {
                         Bets
                       </span>
                     </div>
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-muted flex-wrap">
+                    <div className="mt-3 pt-3 border-t border-border">
                       {bet ? (
-                        <>
+                        <div className="flex items-center gap-1.5 text-sm text-muted flex-wrap">
                           <span>Your bet:</span>
                           <span className="font-semibold text-foreground">{bet.home_score_pred} – {bet.away_score_pred}</span>
-                          {bet.confidence && <span className="text-sm">{CONFIDENCE_EMOJI[bet.confidence]}</span>}
-                          {bet.double_up === 1 && <span className="text-[10px] bg-accent/15 text-accent rounded px-1 font-bold">×2</span>}
-                        </>
+                          {bet.confidence && <span className="text-base">{CONFIDENCE_EMOJI[bet.confidence]}</span>}
+                          {bet.double_up === 1 && <span className="text-xs bg-accent/15 text-accent rounded px-1 font-bold">×2</span>}
+                        </div>
                       ) : (
-                        <span>No prediction placed</span>
+                        <p className="text-center text-xs text-muted">No prediction placed</p>
                       )}
                     </div>
                   </button>
