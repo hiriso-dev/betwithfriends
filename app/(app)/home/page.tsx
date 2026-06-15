@@ -25,6 +25,10 @@ type SpecialBet = { bet_type: string; bet_value: string; points_earned: number |
 
 const WC_START = new Date("2026-06-11T21:00:00Z").getTime();
 
+const CONFIDENCE_EMOJI: Record<string, string> = {
+  cautious: "😬", confident: "👍", reckless: "🔥",
+};
+
 const SPECIAL_BET_TYPES = [
   { type: "champion",    label: "🏆 World Champion", points: 50, description: "Who lifts the trophy?" },
   { type: "runner_up",   label: "🥈 Runner-up",       points: 20, description: "Who loses the final?" },
@@ -227,7 +231,9 @@ export default function HomePage() {
                       </div>
                       <div className="flex flex-col items-center min-w-[64px]">
                         <span className="text-xl font-black tabular-nums leading-none">{primaryScore}</span>
-                        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-success">● Live</span>
+                        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-success whitespace-nowrap">
+                          ● Live · {new Date(m.match_date * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
@@ -238,15 +244,18 @@ export default function HomePage() {
                         Bets
                       </span>
                     </div>
-                    <p className="text-center text-xs text-muted">
-                      <span>🕓 Kicked off {new Date(m.match_date * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                      <span className="mx-1.5">·</span>
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-muted flex-wrap">
                       {bet ? (
-                        <>✓ Your bet: <span className="font-semibold text-foreground">{bet.home_score_pred}–{bet.away_score_pred}</span></>
+                        <>
+                          <span>Your bet:</span>
+                          <span className="font-semibold text-foreground">{bet.home_score_pred} – {bet.away_score_pred}</span>
+                          {bet.confidence && <span className="text-sm">{CONFIDENCE_EMOJI[bet.confidence]}</span>}
+                          {bet.double_up === 1 && <span className="text-[10px] bg-accent/15 text-accent rounded px-1 font-bold">×2</span>}
+                        </>
                       ) : (
-                        <span className="text-muted">No bet placed</span>
+                        <span>No prediction placed</span>
                       )}
-                    </p>
+                    </div>
                   </button>
                 );
               })}
