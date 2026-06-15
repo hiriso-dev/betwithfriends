@@ -62,12 +62,19 @@ type UserNotificationSendResult = {
   blockedReason?: string;
 };
 
+type GroupBetBreakdown = {
+  groupName: string;
+  points: number | null;
+  homeScorePred: number;
+  awayScorePred: number;
+  confidence: Bet["confidence"];
+};
+
 type MatchBetSummary = {
   betCount: number;
   totalPoints: number | null;
-  sampleHomeScorePred: number | null;
-  sampleAwayScorePred: number | null;
-  sampleConfidence: Bet["confidence"];
+  // Per-group breakdown, in the user's group display order.
+  groups: GroupBetBreakdown[];
 };
 
 const CONFIDENCE_LABELS: Record<NonNullable<Bet["confidence"]>, string> = {
@@ -265,6 +272,15 @@ function formatResolvedScore(
   return `${primary} (${match.final_home_score}–${match.final_away_score}${getFinalScoreSuffix(match.score_duration ?? null)})`;
 }
 
+// One line per group: "Group A: +15.0pts (2–1 · 🔥 Reckless)".
+// `points === null` means the bet for that group hasn't been scored yet.
+function formatGroupLine(group: GroupBetBreakdown): string {
+  const points = group.points === null ? "Pending" : formatPoints(group.points);
+  const confidence = formatConfidence(group.confidence);
+  const details = `${group.homeScorePred}–${group.awayScorePred}${confidence ? ` · ${confidence}` : ""}`;
+  return `${group.groupName}: ${points} (${details})`;
+}
+
 function buildResultNotificationBody(
   match: Pick<Match, "home_team" | "away_team" | "home_score" | "away_score"> & Partial<Pick<Match, "final_home_score" | "final_away_score" | "score_duration">>,
   summary: MatchBetSummary
@@ -282,41 +298,18 @@ function buildResultNotificationBody(
     return lines.join("\n");
   }
 
-  if (summary.totalPoints === null) {
-    lines.push("Points: Pending");
-
-    if (summary.betCount === 1 && summary.sampleHomeScorePred !== null && summary.sampleAwayScorePred !== null) {
-      lines.push(`Prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`);
-
-      const confidence = formatConfidence(summary.sampleConfidence);
-      if (confidence) {
-        lines.push(`Confidence: ${confidence}`);
-      }
-
-      return lines.join("\n");
-    }
-
-    lines.push(`Details: Open the app to review your bets across ${summary.betCount} groups`);
-    return lines.join("\n");
+  // List each group's points in the user's group display order, in this one
+  // notification — rather than collapsing every group into a single total.
+  for (const group of summary.groups) {
+    lines.push(formatGroupLine(group));
   }
 
-  if (summary.betCount === 1) {
-    lines.push(`Points: ${formatPoints(summary.totalPoints)}`);
-
-    if (summary.sampleHomeScorePred !== null && summary.sampleAwayScorePred !== null) {
-      lines.push(`Prediction: ${summary.sampleHomeScorePred}–${summary.sampleAwayScorePred}`);
-    }
-
-    const confidence = formatConfidence(summary.sampleConfidence);
-    if (confidence) {
-      lines.push(`Confidence: ${confidence}`);
-    }
-
-    return lines.join("\n");
+  // When the user bet in more than one group and all are scored, also show the
+  // combined total so they don't have to add it up.
+  if (summary.groups.length > 1 && summary.totalPoints !== null) {
+    lines.push(`Total: ${formatPoints(summary.totalPoints)}`);
   }
 
-  lines.push(`Points: ${formatPoints(summary.totalPoints)} across ${summary.betCount} groups`);
-  lines.push(`Details: Open the app to review your bets across ${summary.betCount} groups`);
   return lines.join("\n");
 }
 
@@ -325,11 +318,18 @@ async function getUserMatchBetSummary(
   userId: string,
   match: Pick<Match, "id" | "home_score" | "away_score">
 ): Promise<MatchBetSummary> {
+  // Ordered the same way the user sees their groups in the app
+  // (GET /api/groups): personal sort_order first, then newest group.
   const rows = await env.DB.prepare(`
-    SELECT home_score_pred, away_score_pred, confidence, double_up, points_earned
-    FROM bets
-    WHERE user_id = ? AND match_id = ?
+    SELECT g.name AS group_name,
+           b.home_score_pred, b.away_score_pred, b.confidence, b.double_up, b.points_earned
+    FROM bets b
+    JOIN groups g ON g.id = b.group_id
+    LEFT JOIN group_members gm ON gm.group_id = b.group_id AND gm.user_id = b.user_id
+    WHERE b.user_id = ? AND b.match_id = ?
+    ORDER BY COALESCE(gm.sort_order, 1000000) ASC, g.created_at DESC
   `).bind(userId, match.id).all<{
+    group_name: string;
     home_score_pred: number;
     away_score_pred: number;
     confidence: Bet["confidence"];
@@ -338,69 +338,46 @@ async function getUserMatchBetSummary(
   }>();
 
   if (rows.results.length === 0) {
-    return {
-      betCount: 0,
-      totalPoints: null,
-      sampleHomeScorePred: null,
-      sampleAwayScorePred: null,
-      sampleConfidence: null,
-    };
+    return { betCount: 0, totalPoints: null, groups: [] };
   }
 
-  const [firstBet] = rows.results;
   const hasActualScore = match.home_score !== null && match.away_score !== null;
 
-  if (hasActualScore) {
-    const totalPoints = rows.results.reduce((sum, bet) => sum + calcPoints(
-      bet.home_score_pred,
-      bet.away_score_pred,
-      match.home_score as number,
-      match.away_score as number,
-      bet.confidence,
-      bet.double_up === 1
-    ), 0);
-
+  const groups: GroupBetBreakdown[] = rows.results.map((bet) => {
+    const points = hasActualScore
+      ? calcPoints(
+          bet.home_score_pred,
+          bet.away_score_pred,
+          match.home_score as number,
+          match.away_score as number,
+          bet.confidence,
+          bet.double_up === 1
+        )
+      : bet.points_earned; // null until this bet is scored
     return {
-      betCount: rows.results.length,
-      totalPoints,
-      sampleHomeScorePred: firstBet.home_score_pred,
-      sampleAwayScorePred: firstBet.away_score_pred,
-      sampleConfidence: firstBet.confidence,
+      groupName: bet.group_name,
+      points,
+      homeScorePred: bet.home_score_pred,
+      awayScorePred: bet.away_score_pred,
+      confidence: bet.confidence,
     };
-  }
+  });
 
-  if (rows.results.every((bet) => bet.points_earned !== null)) {
-    const totalPoints = rows.results.reduce((sum, bet) => sum + (bet.points_earned ?? 0), 0);
+  // Total is only meaningful once every group's bet has been scored.
+  const allScored = groups.every((group) => group.points !== null);
+  const totalPoints = allScored
+    ? Math.round(groups.reduce((sum, group) => sum + (group.points ?? 0), 0) * 10) / 10
+    : null;
 
-    return {
-      betCount: rows.results.length,
-      totalPoints,
-      sampleHomeScorePred: firstBet.home_score_pred,
-      sampleAwayScorePred: firstBet.away_score_pred,
-      sampleConfidence: firstBet.confidence,
-    };
-  }
-
-  return {
-    betCount: rows.results.length,
-    totalPoints: null,
-    sampleHomeScorePred: firstBet.home_score_pred,
-    sampleAwayScorePred: firstBet.away_score_pred,
-    sampleConfidence: firstBet.confidence,
-  };
+  return { betCount: groups.length, totalPoints, groups };
 }
 
 export async function sendMatchResultNotifications(env: Env, match: Match): Promise<void> {
-  // Only send result notifications once the user's bet points are actually available.
+  // Eligible recipients: a push subscription, the result pref on (default on),
+  // at least one bet on this match, and every one of their bets scored. The
+  // per-group point breakdown is built per user below via getUserMatchBetSummary.
   const rows = await env.DB.prepare(`
-    SELECT
-      ps.user_id,
-      ps.subscription_json,
-      COUNT(b.id) AS bet_count,
-      COALESCE(SUM(b.points_earned), 0) AS total_points,
-      MIN(b.home_score_pred) AS sample_home_score_pred,
-      MIN(b.away_score_pred) AS sample_away_score_pred,
-      MIN(b.confidence) AS sample_confidence
+    SELECT ps.user_id, ps.subscription_json
     FROM push_subscriptions ps
     JOIN bets b ON b.user_id = ps.user_id AND b.match_id = ?
     LEFT JOIN notification_prefs np ON np.user_id = ps.user_id
@@ -410,11 +387,6 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
   `).bind(match.id).all<{
     user_id: string;
     subscription_json: string;
-    bet_count: number;
-    total_points: number;
-    sample_home_score_pred: number | null;
-    sample_away_score_pred: number | null;
-    sample_confidence: Bet["confidence"];
   }>();
 
   for (const row of rows.results) {
@@ -422,13 +394,8 @@ export async function sendMatchResultNotifications(env: Env, match: Match): Prom
     if (!reserved) continue;
 
     const sub = JSON.parse(row.subscription_json) as PushSubscription;
-    const body = buildResultNotificationBody(match, {
-      betCount: row.bet_count,
-      totalPoints: row.total_points,
-      sampleHomeScorePred: row.sample_home_score_pred,
-      sampleAwayScorePred: row.sample_away_score_pred,
-      sampleConfidence: row.bet_count === 1 ? row.sample_confidence : null,
-    });
+    const summary = await getUserMatchBetSummary(env, row.user_id, match);
+    const body = buildResultNotificationBody(match, summary);
 
     const result = await sendPush(env, sub, {
       title: "⚽ Match result",
