@@ -372,7 +372,9 @@ export default function HomePage() {
                     {bet && (
                       <div className="text-right ml-2">
                         <p className={`text-sm font-bold ${color}`}>
-                          {bet.points_earned !== null && bet.points_earned > 0 ? `+${bet.points_earned.toFixed(1)}pts` : "0pts"}
+                          {bet.points_earned === null
+                            ? "—"
+                            : `${bet.points_earned > 0 ? "+" : ""}${bet.points_earned.toFixed(1)}pts`}
                         </p>
                         <p className="text-[10px] text-muted">{bet.home_score_pred}–{bet.away_score_pred}</p>
                       </div>
