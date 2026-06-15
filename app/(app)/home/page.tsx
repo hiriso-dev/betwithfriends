@@ -212,29 +212,41 @@ export default function HomePage() {
               {liveMatches.map(m => {
                 const scoreDisplay = getMatchScoreDisplay(m);
                 const primaryScore = scoreDisplay.primary ?? PENDING_SCORE;
+                const bet = m.my_bet;
                 return (
                   <button
                     key={m.id}
                     onClick={() => router.push(`/matches/${m.id}/bets${selectedGroup ? `?group_id=${selectedGroup}` : ""}`)}
                     title="See everyone's bets"
-                    className="w-full flex items-center gap-3 px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
+                    className="w-full flex flex-col gap-2 px-4 py-3 lg:px-6 lg:py-4 border-b border-border last:border-0 text-left transition active:bg-surface-hover hover:bg-surface-hover"
                   >
-                    <div className="flex-1 min-w-0 text-right">
-                      <p className="text-sm font-bold leading-tight truncate">{m.home_team} <Flag code={m.home_team_code} /></p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider">{m.home_team_code}</p>
+                    <div className="flex w-full items-center gap-3">
+                      <div className="flex-1 min-w-0 text-right">
+                        <p className="text-sm font-bold leading-tight truncate">{m.home_team} <Flag code={m.home_team_code} /></p>
+                        <p className="text-[10px] text-muted uppercase tracking-wider">{m.home_team_code}</p>
+                      </div>
+                      <div className="flex flex-col items-center min-w-[64px]">
+                        <span className="text-xl font-black tabular-nums leading-none">{primaryScore}</span>
+                        <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-success">● Live</span>
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
+                        <p className="text-[10px] text-muted uppercase tracking-wider">{m.away_team_code}</p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-accent">
+                        <BinocularsIcon size={13} />
+                        Bets
+                      </span>
                     </div>
-                    <div className="flex flex-col items-center min-w-[64px]">
-                      <span className="text-xl font-black tabular-nums leading-none">{primaryScore}</span>
-                      <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-success">● Live</span>
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-bold leading-tight truncate"><Flag code={m.away_team_code} /> {m.away_team}</p>
-                      <p className="text-[10px] text-muted uppercase tracking-wider">{m.away_team_code}</p>
-                    </div>
-                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-accent">
-                      <BinocularsIcon size={13} />
-                      Bets
-                    </span>
+                    <p className="text-center text-xs text-muted">
+                      <span>🕓 Kicked off {new Date(m.match_date * 1000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <span className="mx-1.5">·</span>
+                      {bet ? (
+                        <>✓ Your bet: <span className="font-semibold text-foreground">{bet.home_score_pred}–{bet.away_score_pred}</span></>
+                      ) : (
+                        <span className="text-muted">No bet placed</span>
+                      )}
+                    </p>
                   </button>
                 );
               })}
@@ -342,7 +354,10 @@ export default function HomePage() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{m.home_team} <Flag code={m.home_team_code} /> {scoreDisplay.inline} <Flag code={m.away_team_code} /> {m.away_team}</p>
-                      <p className="text-[10px] text-muted">Group {m.group_name}</p>
+                      <p className="text-[10px] text-muted">
+                        {new Date(m.match_date * 1000).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {m.group_name && <> · Group {m.group_name}</>}
+                      </p>
                     </div>
                     {bet && (
                       <div className="text-right ml-2">
