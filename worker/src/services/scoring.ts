@@ -66,6 +66,15 @@ export async function processMatchResult(env: Env, match: Match): Promise<void> 
       confidence: string | null; double_up: number;
     }>();
 
+    if (allBets.results.length === 0) continue;
+
+    // Write a bet's points_earned and its member's total_points together in one
+    // D1 transaction (env.DB.batch is atomic). If the two ran as separate
+    // statements and the run were interrupted between them, total_points would
+    // drift permanently out of sync with the sum of points_earned. Batching per
+    // group keeps each group's scoring all-or-nothing; an unscored group is
+    // simply retried on the next sync tick (its bets are still points_earned NULL).
+    const statements: D1PreparedStatement[] = [];
     for (const bet of allBets.results) {
       const pts = calcPoints(
         bet.home_score_pred, bet.away_score_pred,
@@ -73,15 +82,20 @@ export async function processMatchResult(env: Env, match: Match): Promise<void> 
         bet.confidence, bet.double_up === 1
       );
 
-      await env.DB.prepare("UPDATE bets SET points_earned = ? WHERE id = ?")
-        .bind(pts, bet.id).run();
+      statements.push(
+        env.DB.prepare("UPDATE bets SET points_earned = ? WHERE id = ?").bind(pts, bet.id)
+      );
 
       // Preview matches: show points on the bet card but don't affect the leaderboard
       if (!match.preview) {
-        await env.DB.prepare(
-          "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
-        ).bind(pts, group_id, bet.user_id).run();
+        statements.push(
+          env.DB.prepare(
+            "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
+          ).bind(pts, group_id, bet.user_id)
+        );
       }
     }
+
+    await env.DB.batch(statements);
   }
 }

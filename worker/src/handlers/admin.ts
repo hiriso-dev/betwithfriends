@@ -57,22 +57,33 @@ export async function handleAdmin(
         bet_value: string; points_earned: number | null;
       }>();
 
+      // Apply each special bet's points_earned and the matching total_points
+      // delta together in one D1 transaction (env.DB.batch is atomic), so the
+      // two can never diverge and leave total_points drifted. delta = new - old
+      // keeps this idempotent: re-resolving with the same result is a no-op, and
+      // correcting a result adjusts the total by exactly the difference.
       let winners = 0;
+      const statements: D1PreparedStatement[] = [];
       for (const b of bets.results) {
         const newPts = b.bet_value.trim().toLowerCase() === norm ? fullPts : 0;
         const oldPts = b.points_earned ?? 0;
         if (newPts > 0) winners++;
 
-        await env.DB.prepare("UPDATE special_bets SET points_earned = ? WHERE id = ?")
-          .bind(newPts, b.id).run();
+        statements.push(
+          env.DB.prepare("UPDATE special_bets SET points_earned = ? WHERE id = ?").bind(newPts, b.id)
+        );
 
         const delta = newPts - oldPts;
         if (delta !== 0) {
-          await env.DB.prepare(
-            "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
-          ).bind(delta, b.group_id, b.user_id).run();
+          statements.push(
+            env.DB.prepare(
+              "UPDATE group_members SET total_points = total_points + ? WHERE group_id = ? AND user_id = ?"
+            ).bind(delta, b.group_id, b.user_id)
+          );
         }
       }
+
+      if (statements.length > 0) await env.DB.batch(statements);
 
       summary[betType] = { winners, settled: bets.results.length };
     }
