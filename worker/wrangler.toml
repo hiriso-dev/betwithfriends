@@ -23,3 +23,9 @@ crons = ["* * * * *"]
 [dev]
 port = 8787
 local_protocol = "http"
+
+[observability]
+enabled = true
+
+[observability.logs]
+invocation_logs = true

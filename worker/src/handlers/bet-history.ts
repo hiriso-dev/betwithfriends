@@ -16,8 +16,18 @@ export async function handleBetHistory(
 
   if (pathname === "/api/bets/history" && request.method === "GET") {
     const groupId = searchParams.get("group_id") || null;
+    const targetUserId = searchParams.get("user_id") || null;
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10) || 50));
     const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
+
+    // Whose history are we fetching? Default to the caller's own.
+    const viewingUserId = targetUserId ?? auth.userId;
+    const isOther = viewingUserId !== auth.userId;
+
+    // Viewing another member's history is always group-scoped.
+    if (isOther && !groupId) {
+      return err("group_id is required when viewing another user", 400, origin);
+    }
 
     // If group_id provided, verify caller is a member
     if (groupId) {
@@ -27,13 +37,26 @@ export async function handleBetHistory(
       if (!member) return err("Not a member of this group", 403, origin);
     }
 
+    // When viewing another member, resolve their group nickname — this also
+    // verifies the target is a member of the scoped group.
+    let targetPseudo: string | null = null;
+    if (isOther) {
+      const targetMember = await env.DB.prepare(
+        "SELECT pseudo FROM group_members WHERE group_id = ? AND user_id = ?"
+      ).bind(groupId, viewingUserId).first<{ pseudo: string }>();
+      if (!targetMember) return err("User is not a member of this group", 403, origin);
+      targetPseudo = targetMember.pseudo;
+    }
+
+    // Hide a non-self target's not-yet-started predictions (bet-visibility).
+    const visibilityFilter = isOther ? "AND m.match_date <= unixepoch()" : "";
     const groupFilter = groupId ? "AND b.group_id = ?" : "";
     const dataBinds = groupId
-      ? [auth.userId, groupId, limit, offset]
-      : [auth.userId, limit, offset];
+      ? [viewingUserId, groupId, limit, offset]
+      : [viewingUserId, limit, offset];
     const countBinds = groupId
-      ? [auth.userId, groupId]
-      : [auth.userId];
+      ? [viewingUserId, groupId]
+      : [viewingUserId];
 
     const rows = await env.DB.prepare(`
       SELECT
@@ -61,7 +84,7 @@ export async function handleBetHistory(
       FROM bets b
       JOIN matches m ON m.id = b.match_id
       JOIN groups g ON g.id = b.group_id
-      WHERE b.user_id = ? ${groupFilter}
+      WHERE b.user_id = ? ${groupFilter} ${visibilityFilter}
       ORDER BY m.match_date DESC
       LIMIT ? OFFSET ?
     `).bind(...dataBinds).all();
@@ -70,10 +93,10 @@ export async function handleBetHistory(
       SELECT COUNT(*) AS count
       FROM bets b
       JOIN matches m ON m.id = b.match_id
-      WHERE b.user_id = ? ${groupFilter}
+      WHERE b.user_id = ? ${groupFilter} ${visibilityFilter}
     `).bind(...countBinds).first<{ count: number }>();
 
-    return json({ bets: rows.results, total: total?.count ?? 0 }, 200, origin);
+    return json({ bets: rows.results, total: total?.count ?? 0, pseudo: targetPseudo }, 200, origin);
   }
 
   return err("Not found", 404, origin);

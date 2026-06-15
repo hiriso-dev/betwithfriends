@@ -120,9 +120,10 @@ export default function RankingsPage() {
                 const medal = m.rank === 1 ? "🥇" : m.rank === 2 ? "🥈" : m.rank === 3 ? "🥉" : null;
 
                 return (
-                  <div
+                  <button
                     key={m.user_id}
-                    className={`flex items-center gap-3 px-4 py-4 border-b border-border last:border-0 ${m.is_me ? "bg-accent/5" : ""}`}
+                    onClick={() => router.push(`/history?user_id=${m.user_id}&group_id=${selectedGroupId}`)}
+                    className={`w-full text-left flex items-center gap-3 px-4 py-4 border-b border-border last:border-0 transition active:bg-surface-hover ${m.is_me ? "bg-accent/5" : ""}`}
                   >
                     <span className={`w-7 shrink-0 text-center font-bold ${medal ? "text-xl" : "text-sm text-muted"}`}>
                       {medal ?? m.rank}
@@ -143,8 +144,9 @@ export default function RankingsPage() {
                         {m.total_points % 1 === 0 ? m.total_points : m.total_points.toFixed(1)}
                         <span className="text-xs font-normal text-muted ml-0.5">pts</span>
                       </span>
+                      <span className="text-muted text-xs opacity-50">›</span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

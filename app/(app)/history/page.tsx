@@ -67,12 +67,14 @@ function BetHistoryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialGroupId = searchParams.get("group_id") ?? "";
+  const targetUserId = searchParams.get("user_id") ?? "";
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId);
   const [bets, setBets] = useState<BetHistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [pseudo, setPseudo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -89,8 +91,9 @@ function BetHistoryContent() {
   const loadBets = useCallback(async (groupId: string, newOffset: number, append: boolean) => {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(newOffset) });
     if (groupId) params.set("group_id", groupId);
+    if (targetUserId) params.set("user_id", targetUserId);
     try {
-      const data = await apiFetch<{ bets: BetHistoryItem[]; total: number }>(
+      const data = await apiFetch<{ bets: BetHistoryItem[]; total: number; pseudo: string | null }>(
         `/api/bets/history?${params}`
       );
       if (append) {
@@ -99,23 +102,26 @@ function BetHistoryContent() {
         setBets(data.bets);
       }
       setTotal(data.total);
+      setPseudo(data.pseudo);
       setOffset(newOffset + data.bets.length);
     } catch {
       // silently fail — user will see empty state
     }
-  }, []);
+  }, [targetUserId]);
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: "0" });
     if (selectedGroupId) params.set("group_id", selectedGroupId);
+    if (targetUserId) params.set("user_id", targetUserId);
 
-    void apiFetch<{ bets: BetHistoryItem[]; total: number }>(`/api/bets/history?${params}`)
+    void apiFetch<{ bets: BetHistoryItem[]; total: number; pseudo: string | null }>(`/api/bets/history?${params}`)
       .then((data) => {
         if (cancelled) return;
         setBets(data.bets);
         setTotal(data.total);
+        setPseudo(data.pseudo);
         setOffset(data.bets.length);
       })
       .catch(() => {
@@ -129,7 +135,7 @@ function BetHistoryContent() {
     return () => {
       cancelled = true;
     };
-  }, [selectedGroupId]);
+  }, [selectedGroupId, targetUserId]);
 
   function selectGroup(groupId: string) {
     if (groupId === selectedGroupId) return;
@@ -173,14 +179,14 @@ function BetHistoryContent() {
         >
           ←
         </button>
-        <h1 className="text-xl font-bold">Bet History</h1>
+        <h1 className="text-xl font-bold">{targetUserId ? `${pseudo ?? "Player"}'s bets` : "Bet History"}</h1>
         {total > 0 && (
           <span className="ml-auto text-xs text-muted">{total} total</span>
         )}
       </div>
 
-      {/* Group filter */}
-      {groups.length > 1 && (
+      {/* Group filter — hidden when viewing another member (single-group scope) */}
+      {!targetUserId && groups.length > 1 && (
         <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => selectGroup("")}
@@ -205,16 +211,23 @@ function BetHistoryContent() {
       )}
 
       {bets.length === 0 ? (
-        <div className="py-16 text-center">
-          <p className="text-5xl mb-4">🎯</p>
-          <p className="text-sm text-muted mb-4">No bets placed yet — go to Fixtures to place your first bet.</p>
-          <button
-            onClick={() => router.push("/fixtures")}
-            className="rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-[#0f0f23] transition active:scale-95"
-          >
-            Go to Fixtures
-          </button>
-        </div>
+        targetUserId ? (
+          <div className="py-16 text-center">
+            <p className="text-5xl mb-4">🎯</p>
+            <p className="text-sm text-muted">No bets to show yet for this player.</p>
+          </div>
+        ) : (
+          <div className="py-16 text-center">
+            <p className="text-5xl mb-4">🎯</p>
+            <p className="text-sm text-muted mb-4">No bets placed yet — go to Fixtures to place your first bet.</p>
+            <button
+              onClick={() => router.push("/fixtures")}
+              className="rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-[#0f0f23] transition active:scale-95"
+            >
+              Go to Fixtures
+            </button>
+          </div>
+        )
       ) : (
         <div className="space-y-2">
           {bets.map(item => {
