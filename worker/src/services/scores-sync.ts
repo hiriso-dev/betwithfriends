@@ -11,14 +11,35 @@ const MAX_CATCH_UP_FINALIZATIONS_PER_TICK = 20;
 
 /**
  * True when at least one tracked match needs an external refresh or a local
- * catch-up finalization pass. The tracked refresh path works by `api_match_id`
- * so non-WC matches can still move through live/finished states.
+ * catch-up finalization pass. Uses a single no-ORDER-BY LIMIT 1 probe so idle
+ * ticks (no match in window, no unscored bets) pay only one cheap index lookup.
+ *
+ * Covers two conditions in one query:
+ *  1. A match in the live/lookback date window that is due for an API sync.
+ *  2. A finished match with unscored bets (pure-DB finalization, no API call).
  */
 export async function hasMatchNeedingScoreSync(env: Env): Promise<boolean> {
-  const dueMatches = await getDueTrackedMatches(env, 1);
-  if (dueMatches.length > 0) return true;
+  const now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM matches
+     WHERE (
+       api_match_id GLOB '[0-9]*'
+       AND (last_api_sync_at IS NULL OR last_api_sync_at <= ?)
+       AND match_date BETWEEN ? AND ?
+     ) OR (
+       status = 'finished'
+       AND home_score IS NOT NULL
+       AND away_score IS NOT NULL
+       AND EXISTS (SELECT 1 FROM bets WHERE match_id = id AND points_earned IS NULL)
+     )
+     LIMIT 1`
+  ).bind(
+    now - TRACKED_MATCH_SYNC_INTERVAL_SECONDS,
+    now - TRACKED_MATCH_LOOKBACK_SECONDS,
+    now + TRACKED_MATCH_LOOKAHEAD_SECONDS
+  ).first();
 
-  return await hasPendingFinishedFinalization(env);
+  return row !== null;
 }
 
 type FDScoreLine = {
@@ -173,20 +194,6 @@ async function getDueTrackedMatches(env: Env, limit: number): Promise<TrackedMat
   return rows.results.filter((row) => isNumericApiMatchId(row.api_match_id));
 }
 
-async function hasPendingFinishedFinalization(env: Env): Promise<boolean> {
-  const row = await env.DB.prepare(
-    `SELECT 1
-     FROM matches m
-     JOIN bets b ON b.match_id = m.id AND b.points_earned IS NULL
-     WHERE m.status = 'finished'
-       AND m.home_score IS NOT NULL
-       AND m.away_score IS NOT NULL
-     LIMIT 1`
-  ).first();
-
-  return row !== null;
-}
-
 async function fetchMatchByApiId(env: Env, apiMatchId: string): Promise<FDMatch | null> {
   const res = await fetch(`${FOOTBALL_DATA_URL}/matches/${apiMatchId}`, {
     headers: { "X-Auth-Token": env.FOOTBALL_DATA_API_KEY as string },
@@ -214,40 +221,75 @@ async function upsertMatchFromApiMatch(env: Env, match: FDMatch, existingId?: st
   }
 
   const existingRow = await env.DB.prepare(
-    "SELECT id FROM matches WHERE id = ?"
-  ).bind(matchId).first<{ id: string }>();
+    `SELECT id, status, home_score, away_score, final_home_score, final_away_score,
+     score_duration, home_team, away_team, home_team_code, away_team_code, match_date
+     FROM matches WHERE id = ?`
+  ).bind(matchId).first<{
+    id: string;
+    status: string;
+    home_score: number | null;
+    away_score: number | null;
+    final_home_score: number | null;
+    final_away_score: number | null;
+    score_duration: string | null;
+    home_team: string;
+    away_team: string;
+    home_team_code: string | null;
+    away_team_code: string | null;
+    match_date: number;
+  }>();
 
   if (existingRow) {
-    await env.DB.prepare(`
-      UPDATE matches SET
-        home_team = ?, away_team = ?,
-        home_team_code = ?, away_team_code = ?,
-        match_date = ?,
-        home_score = ?, away_score = ?,
-        final_home_score = ?, final_away_score = ?, score_duration = ?,
-        status = ?, stage = ?, group_name = ?,
-        stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
-        last_api_sync_at = unixepoch(),
-        updated_at = unixepoch()
-      WHERE id = ?
-    `).bind(
-      match.homeTeam.name,
-      match.awayTeam.name,
-      match.homeTeam.tla,
-      match.awayTeam.tla,
-      matchDate,
-      scores.homeScore,
-      scores.awayScore,
-      scores.finalHomeScore,
-      scores.finalAwayScore,
-      scores.scoreDuration,
-      status,
-      mapStage(match.stage),
-      match.group,
-      match.venue ?? null,
-      match.area?.name ?? null,
-      matchId
-    ).run();
+    const unchanged =
+      existingRow.status === status &&
+      existingRow.home_score === scores.homeScore &&
+      existingRow.away_score === scores.awayScore &&
+      existingRow.final_home_score === scores.finalHomeScore &&
+      existingRow.final_away_score === scores.finalAwayScore &&
+      existingRow.score_duration === scores.scoreDuration &&
+      existingRow.home_team === match.homeTeam.name &&
+      existingRow.away_team === match.awayTeam.name &&
+      existingRow.home_team_code === match.homeTeam.tla &&
+      existingRow.away_team_code === match.awayTeam.tla &&
+      existingRow.match_date === matchDate;
+
+    if (unchanged) {
+      // Only advance the sync cooldown timer — no index entries rewritten.
+      await env.DB.prepare(
+        "UPDATE matches SET last_api_sync_at = unixepoch() WHERE id = ?"
+      ).bind(matchId).run();
+    } else {
+      await env.DB.prepare(`
+        UPDATE matches SET
+          home_team = ?, away_team = ?,
+          home_team_code = ?, away_team_code = ?,
+          match_date = ?,
+          home_score = ?, away_score = ?,
+          final_home_score = ?, final_away_score = ?, score_duration = ?,
+          status = ?, stage = ?, group_name = ?,
+          stadium = COALESCE(?, stadium), venue_city = COALESCE(?, venue_city),
+          last_api_sync_at = unixepoch(),
+          updated_at = unixepoch()
+        WHERE id = ?
+      `).bind(
+        match.homeTeam.name,
+        match.awayTeam.name,
+        match.homeTeam.tla,
+        match.awayTeam.tla,
+        matchDate,
+        scores.homeScore,
+        scores.awayScore,
+        scores.finalHomeScore,
+        scores.finalAwayScore,
+        scores.scoreDuration,
+        status,
+        mapStage(match.stage),
+        match.group,
+        match.venue ?? null,
+        match.area?.name ?? null,
+        matchId
+      ).run();
+    }
 
     return matchId;
   }

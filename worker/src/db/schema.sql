@@ -132,3 +132,17 @@ CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_matches_date ON matches(match_date);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_match ON notification_deliveries(match_id, delivery_type);
+
+-- Partial indexes for efficient cron gate queries.
+-- idx_bets_unscored: makes all "any unscored bets?" EXISTS checks O(1) — shrinks
+--   as bets get scored over the tournament.
+-- idx_matches_reminder_candidates: bounds the pre-game reminder candidate scan to
+--   only scheduled matches still needing reminders, ordered by match_date.
+-- idx_matches_active: backs the tracked-match date-window scan, excluding finished
+--   matches which never need re-syncing for live score purposes.
+CREATE INDEX IF NOT EXISTS idx_bets_unscored
+  ON bets(match_id) WHERE points_earned IS NULL;
+CREATE INDEX IF NOT EXISTS idx_matches_reminder_candidates
+  ON matches(match_date) WHERE status = 'scheduled' AND reminders_done = 0;
+CREATE INDEX IF NOT EXISTS idx_matches_active
+  ON matches(match_date) WHERE status != 'finished';
