@@ -94,14 +94,18 @@ function TapScore({ value, onChange }: { value: number; onChange: (n: number) =>
   );
 }
 
+const MAX_DOUBLE_UPS = 2;
+
 export default function MatchCard({
   match,
   groupId,
+  doubleUpsUsed = 0,
   onBet,
   onSaved,
 }: {
   match: Match;
   groupId?: string;
+  doubleUpsUsed?: number;
   onBet: () => void;
   onSaved?: () => void;
 }) {
@@ -131,6 +135,14 @@ export default function MatchCard({
     qDoubleUp: (match.my_bet?.double_up ?? 0) === 1,
   });
   const { quickMode, qHome, qAway, qConfidence, qDoubleUp } = formState;
+
+  // Double Up cap (max 2 per group). doubleUpsUsed counts every match in the
+  // group whose bet uses it — including this one — so add 1 back when this bet
+  // already has it on, matching the full BetSheet's remaining calculation.
+  const alreadyDoubleUp = (match.my_bet?.double_up ?? 0) === 1;
+  const doubleUpsRemaining = MAX_DOUBLE_UPS - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
+  const canDoubleUp = qDoubleUp || doubleUpsRemaining > 0;
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -325,14 +337,17 @@ export default function MatchCard({
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setFormState(prev => ({ ...prev, qDoubleUp: !prev.qDoubleUp })); }}
-                  className={`rounded-full px-3 h-10 text-sm font-black border-2 transition active:scale-95 ${
+                  disabled={!canDoubleUp}
+                  onClick={(e) => { e.stopPropagation(); if (canDoubleUp) setFormState(prev => ({ ...prev, qDoubleUp: !prev.qDoubleUp })); }}
+                  className={`rounded-full px-3 h-10 text-sm font-black border-2 transition active:scale-95 disabled:opacity-40 disabled:active:scale-100 ${
                     qDoubleUp ? "bg-accent text-[#0f0f23] border-accent" : "border-border text-muted bg-surface-hover"
                   }`}
                 >
                   ×2
                 </button>
-                <span className={`text-[9px] font-medium transition ${qDoubleUp ? "text-accent" : "text-muted"}`}>if positive</span>
+                <span className={`text-[9px] font-medium transition ${qDoubleUp ? "text-accent" : "text-muted"}`}>
+                  {canDoubleUp ? "if positive" : "0 left"}
+                </span>
               </div>
             </div>
           </div>

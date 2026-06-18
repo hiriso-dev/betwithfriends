@@ -183,6 +183,9 @@ export default function FixturesPage() {
   const standings = computeStandings(groupMatches);
 
   const groupBettingId = bettingGroupId !== "none" ? bettingGroupId : undefined;
+  // Total Double Ups used across this group (cap is 2/group). Passed to each card
+  // so the inline quick-bet ×2 toggle reflects the same cap as the full BetSheet.
+  const doubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1).length;
 
   return (
     <div className="mx-auto max-w-lg lg:max-w-none px-4 pt-4 pb-4 lg:px-8 lg:pt-6">
@@ -257,7 +260,7 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
@@ -276,7 +279,7 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {roundMatches.map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
@@ -300,7 +303,7 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
@@ -326,7 +329,7 @@ export default function FixturesPage() {
             <div className="lg:col-span-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {groupMatches.map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
                 {groupMatches.length === 0 && (
