@@ -277,10 +277,19 @@ export default function FixturesPage() {
                 <div className="hidden lg:block flex-1 h-px bg-border" />
                 <p className="hidden lg:block text-xs text-muted">{roundMatches.length} match{roundMatches.length === 1 ? "" : "es"}</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {roundMatches.map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
-                    onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+              {/* Within a knockout round, sub-group by day so multi-day rounds
+                  (e.g. Round of 32 spans several days) get date subheaders. */}
+              <div className="space-y-4 lg:space-y-6">
+                {Object.entries(groupByDay(roundMatches)).map(([day, dayMatches]) => (
+                  <div key={day}>
+                    <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted/80">{day}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {dayMatches.map(match => (
+                        <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
+                          onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
