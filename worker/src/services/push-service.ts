@@ -1,4 +1,4 @@
-import { calcPoints } from "./scoring";
+import { calcPoints, isKnockoutMatch } from "./scoring";
 import { Bet, Env, Match } from "../types";
 
 type PushPayload = {
@@ -316,7 +316,7 @@ function buildResultNotificationBody(
 async function getUserMatchBetSummary(
   env: Env,
   userId: string,
-  match: Pick<Match, "id" | "home_score" | "away_score">
+  match: Pick<Match, "id" | "home_score" | "away_score" | "stage" | "group_name">
 ): Promise<MatchBetSummary> {
   // Ordered the same way the user sees their groups in the app
   // (GET /api/groups): personal sort_order first, then newest group.
@@ -342,6 +342,7 @@ async function getUserMatchBetSummary(
   }
 
   const hasActualScore = match.home_score !== null && match.away_score !== null;
+  const knockout = isKnockoutMatch(match);
 
   const groups: GroupBetBreakdown[] = rows.results.map((bet) => {
     const points = hasActualScore
@@ -351,7 +352,8 @@ async function getUserMatchBetSummary(
           match.home_score as number,
           match.away_score as number,
           bet.confidence,
-          bet.double_up === 1
+          bet.double_up === 1,
+          knockout
         )
       : bet.points_earned; // null until this bet is scored
     return {
@@ -604,7 +606,7 @@ export async function sendReminderNotificationToUser(
 export async function sendResultNotificationToUser(
   env: Env,
   userId: string,
-  match: Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score">
+  match: Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score" | "stage" | "group_name">
 ): Promise<UserNotificationSendResult> {
   const summary = await getUserMatchBetSummary(env, userId, match);
   if (!hasAvailablePoints(summary)) {
@@ -629,6 +631,56 @@ export async function sendResultNotificationToUser(
     urgency: "high",
     ttl: 6 * 3600,
   });
+}
+
+type BroadcastResult = {
+  subscriptions: number;
+  sent: number;
+  failed: number;
+  firstError?: string;
+};
+
+// Fan a single payload out to every push subscription in the DB (one send per
+// device). Used by the admin broadcast endpoint for announcements like
+// "all games are ready to bet". Respects no per-user pref — this is an explicit
+// admin action — but expired subscriptions are still pruned by sendPush.
+export async function sendBroadcastNotification(
+  env: Env,
+  payload: PushPayload,
+  options: PushSendOptions = {}
+): Promise<BroadcastResult> {
+  const rows = await env.DB.prepare(
+    "SELECT subscription_json FROM push_subscriptions"
+  ).all<{ subscription_json: string }>();
+
+  let sent = 0;
+  let failed = 0;
+  let firstError: string | undefined;
+
+  for (const row of rows.results) {
+    let sub: PushSubscription;
+    try {
+      sub = JSON.parse(row.subscription_json) as PushSubscription;
+    } catch {
+      failed += 1;
+      continue;
+    }
+
+    const result = await sendPush(env, sub, payload, {
+      urgency: "high",
+      ttl: 24 * 3600,
+      ...options,
+    });
+
+    if (result.ok) {
+      sent += 1;
+    } else {
+      failed += 1;
+      if (!firstError) firstError = result.errorMessage;
+    }
+  }
+
+  return { subscriptions: rows.results.length, sent, failed, firstError };
 }
 
 export async function sendTestNotification(env: Env, userId: string): Promise<UserNotificationSendResult> {

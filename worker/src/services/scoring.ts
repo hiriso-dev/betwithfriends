@@ -9,6 +9,11 @@ import { Env, Match } from "../types";
       confident: +5 if correct / -5 if wrong
       reckless: +10 if correct / -10 if wrong
   - Double Up: ×2 to total, but ONLY if total > 0
+  - Knockout boost: in knockout rounds the *confidence modifier* is doubled
+    (cautious ±4 / confident ±10 / reckless ±20). The flat base (+10) and exact
+    bonus (+5) are unchanged, so the safe haul everyone shares stays the same —
+    only the risk players opt into pays (or costs) more, widening the per-game
+    spread so trailing players can catch up. See CLAUDE.md "Scoring system".
 */
 
 const CONFIDENCE: Record<string, { correct: number; wrong: number }> = {
@@ -16,6 +21,16 @@ const CONFIDENCE: Record<string, { correct: number; wrong: number }> = {
   confident: { correct: 5,  wrong: -5  },
   reckless:  { correct: 10, wrong: -10 },
 };
+
+// Confidence multiplier applied in knockout rounds (group stage = 1).
+export const KNOCKOUT_CONFIDENCE_MULTIPLIER = 2;
+
+// A match is a knockout tie when it belongs to no group. Group-stage rows always
+// carry a group_name (seed: "A", synced: "GROUP_A"); knockout rows have null.
+// The stage guard is belt-and-suspenders against malformed group rows.
+export function isKnockoutMatch(match: { stage: string | null; group_name: string | null }): boolean {
+  return match.group_name === null && match.stage !== "Group Stage";
+}
 
 function getOutcome(home: number, away: number): "home" | "draw" | "away" {
   if (home > away) return "home";
@@ -29,7 +44,8 @@ export function calcPoints(
   homeActual: number,
   awayActual: number,
   confidence: string | null,
-  doubleUp: boolean
+  doubleUp: boolean,
+  isKnockout = false
 ): number {
   const isCorrect = getOutcome(homePred, awayPred) === getOutcome(homeActual, awayActual);
   const isExact = homePred === homeActual && awayPred === awayActual;
@@ -39,7 +55,8 @@ export function calcPoints(
   if (isExact) pts += 5;
 
   if (confidence && CONFIDENCE[confidence]) {
-    pts += isCorrect ? CONFIDENCE[confidence].correct : CONFIDENCE[confidence].wrong;
+    const mod = isCorrect ? CONFIDENCE[confidence].correct : CONFIDENCE[confidence].wrong;
+    pts += isKnockout ? mod * KNOCKOUT_CONFIDENCE_MULTIPLIER : mod;
   }
 
   if (doubleUp && pts > 0) pts *= 2;
@@ -74,12 +91,14 @@ export async function processMatchResult(env: Env, match: Match): Promise<void> 
     // drift permanently out of sync with the sum of points_earned. Batching per
     // group keeps each group's scoring all-or-nothing; an unscored group is
     // simply retried on the next sync tick (its bets are still points_earned NULL).
+    const knockout = isKnockoutMatch(match);
     const statements: D1PreparedStatement[] = [];
     for (const bet of allBets.results) {
       const pts = calcPoints(
         bet.home_score_pred, bet.away_score_pred,
         homeActual, awayActual,
-        bet.confidence, bet.double_up === 1
+        bet.confidence, bet.double_up === 1,
+        knockout
       );
 
       statements.push(

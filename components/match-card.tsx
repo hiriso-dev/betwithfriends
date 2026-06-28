@@ -100,12 +100,14 @@ export default function MatchCard({
   match,
   groupId,
   doubleUpsUsed = 0,
+  maxDoubleUps = MAX_DOUBLE_UPS,
   onBet,
   onSaved,
 }: {
   match: Match;
   groupId?: string;
   doubleUpsUsed?: number;
+  maxDoubleUps?: number;
   onBet: () => void;
   onSaved?: () => void;
 }) {
@@ -126,6 +128,10 @@ export default function MatchCard({
 
   const hasBet = !!match.my_bet;
   const canBet = !!groupId && !isLocked && !isFinished && !isLive;
+  // Knockout rounds double the confidence booster (base/exact unchanged) — mirrors
+  // calcPoints in the worker. Group rows always carry a group_name; knockouts don't.
+  const isKnockout = match.group_name === null && match.stage !== "Group Stage";
+  const boostMult = isKnockout ? 2 : 1;
 
   const [formState, setFormState] = useState({
     quickMode: !hasBet && canBet,
@@ -136,11 +142,12 @@ export default function MatchCard({
   });
   const { quickMode, qHome, qAway, qConfidence, qDoubleUp } = formState;
 
-  // Double Up cap (max 2 per group). doubleUpsUsed counts every match in the
-  // group whose bet uses it — including this one — so add 1 back when this bet
-  // already has it on, matching the full BetSheet's remaining calculation.
+  // Double Up cap. The parent passes the phase-aware cap (group stage 2; knockout
+  // 4 − group used, so unused group-stage ones roll over) and doubleUpsUsed for
+  // THIS match's phase, including this one — so add 1 back when this bet already
+  // has it on, matching the full BetSheet's remaining calculation.
   const alreadyDoubleUp = (match.my_bet?.double_up ?? 0) === 1;
-  const doubleUpsRemaining = MAX_DOUBLE_UPS - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
+  const doubleUpsRemaining = maxDoubleUps - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
   const canDoubleUp = qDoubleUp || doubleUpsRemaining > 0;
 
   const [saving, setSaving] = useState(false);
@@ -314,9 +321,14 @@ export default function MatchCard({
             >
               ?
             </button>
-            <p className="mb-3 text-center text-[10px] text-muted">Boost your bet — optional</p>
+            <p className="mb-3 text-center text-[10px] text-muted">
+              Boost your bet — optional
+              {isKnockout && <span className="ml-1 font-bold text-accent">· 🔥 Knockout ×2</span>}
+            </p>
             <div className="flex items-start justify-center gap-3">
-              {CONFIDENCE_OPTIONS.map(({ value, emoji, label, n }) => (
+              {CONFIDENCE_OPTIONS.map(({ value, emoji, label, n }) => {
+                const boosted = n * boostMult;
+                return (
                 <div key={value} className="flex flex-col items-center gap-1">
                   <button
                     type="button"
@@ -328,9 +340,10 @@ export default function MatchCard({
                     {emoji}
                   </button>
                   <span className={`text-[9px] font-medium transition ${qConfidence === value ? "text-accent" : "text-muted"}`}>{label}</span>
-                  <span className={`text-[9px] transition ${qConfidence === value ? "text-accent" : "text-muted"}`}>+{n}/-{n}</span>
+                  <span className={`text-[9px] transition ${qConfidence === value ? "text-accent" : "text-muted"}`}>+{boosted}/-{boosted}</span>
                 </div>
-              ))}
+                );
+              })}
 
               <div className="w-px self-stretch bg-border/60 mx-1" />
 

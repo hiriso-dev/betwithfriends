@@ -146,8 +146,8 @@ const worker = {
         if (!match_id) return err("match_id is required", 400, origin);
 
         const match = await env.DB.prepare(
-          "SELECT id, home_team, away_team, home_score, away_score FROM matches WHERE id = ?"
-        ).bind(match_id).first<Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score">>();
+          "SELECT id, home_team, away_team, home_score, away_score, stage, group_name FROM matches WHERE id = ?"
+        ).bind(match_id).first<Pick<Match, "id" | "home_team" | "away_team" | "home_score" | "away_score" | "stage" | "group_name">>();
 
         if (!match) return err("Match not found", 404, origin);
 

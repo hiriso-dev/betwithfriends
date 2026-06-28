@@ -64,7 +64,9 @@ Confidence modifier (additive, applied after base):
 | Confident 👍 | +5 | −5 |
 | Reckless 🔥 | +10 | −10 |
 
-**Double Up** (×2 multiplier on total, max 2 per group): only applies if total > 0.
+**Knockout booster:** in knockout rounds (any match with `group_name = NULL`) the **confidence modifier is doubled** — Cautious ±4, Confident ±10, Reckless ±20 (`KNOCKOUT_CONFIDENCE_MULTIPLIER` in `scoring.ts`). The flat base (+10) and exact bonus (+5) are unchanged, so the safe haul everyone shares stays the same; only the risk players opt into pays/costs more, widening the per-game spread so trailing players can catch up. `isKnockoutMatch()` is the single source of truth (worker), mirrored by `isKnockout()` in the fixtures-page and match-card previews. Applied **before** Double Up, so it stacks multiplicatively (e.g. exact + reckless + double-up in a knockout = (15 + 20) × 2 = 70).
+
+**Double Up** (×2 multiplier on total): only applies if total > 0. Budget **per group**: max 2 in the group stage and max 4 across the whole tournament, so the knockout phase gets `4 − (group-stage used)` — unused group-stage Double Ups roll over (0 used → 4 in knockouts, 1 → 3, 2 → 2). Enforced in `bets.ts` (`MAX_DOUBLE_UPS = 2`, `MAX_DOUBLE_UPS_TOURNAMENT = 4`): a knockout bet counts **all** the user's double-ups in the group against 4; a group-stage bet counts only group-stage ones against 2. Frontend mirrors this in the fixtures page (`doubleUpsUsedFor`/`maxDoubleUpsFor`) and the `maxDoubleUps` prop on match-card.
 
 ## Special bets (tournament-level)
 
@@ -154,7 +156,7 @@ Required variables: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
 ## Important constraints
 
 - Bet locking is enforced on the frontend (5 min) and the backend validates match status
-- Double Up is capped at 2 per user per group; backend tracks usage
+- Double Up budget per user per group: max 2 group stage, max 4 tournament (unused group-stage ones roll over to knockouts); backend tracks usage
 - The 401 handler in `lib/api.ts` clears the cookie and redirects to `/login` globally
 - Worker checks user existence in DB after JWT verify (handles wiped DB with stale JWTs)
 - Push notifications use Web Push (VAPID); SW is registered in `components/sw-registrar.tsx`

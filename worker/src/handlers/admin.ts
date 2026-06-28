@@ -1,5 +1,6 @@
 import { Env, AuthContext } from "../types";
 import { syncScores } from "../services/scores-sync";
+import { sendBroadcastNotification } from "../services/push-service";
 import { POINTS_MAP } from "./special-bets";
 
 type JsonFn = (data: unknown, status?: number, origin?: string) => Response;
@@ -29,6 +30,34 @@ export async function handleAdmin(
     const competition = (body as { competition?: string }).competition ?? "WC";
     await syncScores(env, competition);
     return json({ ok: true, competition }, 200, origin);
+  }
+
+  // POST /api/admin/broadcast — send one push notification to every subscribed
+  // device. Body: { title, body, url? }. Use for announcements like
+  // "all games are ready to bet". Returns delivery counts.
+  if (pathname === "/api/admin/broadcast" && request.method === "POST") {
+    const body = await request
+      .json<{ title?: string; body?: string; url?: string }>()
+      .catch(() => ({} as { title?: string; body?: string; url?: string }));
+
+    const title = body.title?.trim();
+    const message = body.body?.trim();
+    if (!title || !message) {
+      return err("title and body are required", 400, origin);
+    }
+
+    const result = await sendBroadcastNotification(env, {
+      title,
+      body: message,
+      icon: "/favicon-512.png",
+      badge: "/favicon-512.png",
+      tag: "broadcast",
+      url: body.url?.trim() || "/fixtures",
+    }, {
+      topic: "broadcast",
+    });
+
+    return json({ ok: true, ...result }, 200, origin);
   }
 
   // POST /api/admin/resolve-special — settle tournament special bets.

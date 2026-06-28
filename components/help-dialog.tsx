@@ -87,13 +87,19 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
               <Row label="🔥 Reckless" value="±10 pts" />
             </div>
             <p className="mt-2 text-xs text-muted">Example: Confident + correct result = 10 + 5 = <strong className="text-foreground">15 pts</strong>. Wrong = 10 → 0 − 5 = <strong className="text-danger">−5 pts</strong>.</p>
+            <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs leading-relaxed text-muted">
+              🔥 <strong className="text-accent">Knockout rounds (Round of 32 → Final):</strong> the confidence boost is{" "}
+              <strong className="text-foreground">doubled</strong> — Cautious ±4, Confident ±10, Reckless ±20.
+              The base +10 and exact +5 stay the same. Bold, correct calls swing harder, so the title stays up for grabs.
+            </p>
           </Section>
 
           {/* Double Up */}
           <Section title="×2 Double Up">
             <p className="text-sm text-muted leading-relaxed">
               Toggle <strong className="text-foreground">×2</strong> on a bet to double all points earned — but only if you score more than 0.
-              You can use it on up to <strong className="text-foreground">2 matches per group</strong>.
+              You get <strong className="text-foreground">2 in the group stage</strong>, plus{" "}
+              <strong className="text-accent">2 extra for the knockout phase</strong> (Round of 32 → Final).
             </p>
           </Section>
 

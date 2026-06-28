@@ -12,6 +12,11 @@ const ADMIN_EMAIL = "jerome.ladeveze@gmail.com";
 
 const WC_GROUPS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
+// Double Up budget (mirrors worker/handlers/bets.ts): 2 in the group stage,
+// 4 across the whole tournament — so the knockout phase gets 4 − (group used).
+const GROUP_STAGE_DOUBLE_UPS = 2;
+const TOURNAMENT_DOUBLE_UPS = 4;
+
 type Match = {
   id: string;
   home_team: string; away_team: string;
@@ -183,9 +188,14 @@ export default function FixturesPage() {
   const standings = computeStandings(groupMatches);
 
   const groupBettingId = bettingGroupId !== "none" ? bettingGroupId : undefined;
-  // Total Double Ups used across this group (cap is 2/group). Passed to each card
-  // so the inline quick-bet ×2 toggle reflects the same cap as the full BetSheet.
-  const doubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1).length;
+  // Double Up budget: 2 group stage, 4 tournament. The knockout phase gets
+  // 4 − (group used), so unused group-stage Double Ups roll over. Count each
+  // phase separately and pass the count + cap for a card's own phase, so the
+  // inline quick-bet ×2 toggle matches the full BetSheet and the backend.
+  const knockoutDoubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && isKnockout(m)).length;
+  const groupDoubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && !isKnockout(m)).length;
+  const doubleUpsUsedFor = (m: Match) => (isKnockout(m) ? knockoutDoubleUpsUsed : groupDoubleUpsUsed);
+  const maxDoubleUpsFor = (m: Match) => (isKnockout(m) ? TOURNAMENT_DOUBLE_UPS - groupDoubleUpsUsed : GROUP_STAGE_DOUBLE_UPS);
 
   return (
     <div className="mx-auto max-w-lg lg:max-w-none px-4 pt-4 pb-4 lg:px-8 lg:pt-6">
@@ -260,7 +270,7 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsedFor(match)} maxDoubleUps={maxDoubleUpsFor(match)} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
@@ -285,7 +295,7 @@ export default function FixturesPage() {
                     <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted/80">{day}</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                       {dayMatches.map(match => (
-                        <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
+                        <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsedFor(match)} maxDoubleUps={maxDoubleUpsFor(match)} onBet={() => setBetTarget(match)}
                           onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                       ))}
                     </div>
@@ -312,7 +322,7 @@ export default function FixturesPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {(dayMatches as Match[]).map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsedFor(match)} maxDoubleUps={maxDoubleUpsFor(match)} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
               </div>
@@ -338,7 +348,7 @@ export default function FixturesPage() {
             <div className="lg:col-span-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {groupMatches.map(match => (
-                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsed} onBet={() => setBetTarget(match)}
+                  <MatchCard key={match.id} match={match} groupId={groupBettingId} doubleUpsUsed={doubleUpsUsedFor(match)} maxDoubleUps={maxDoubleUpsFor(match)} onBet={() => setBetTarget(match)}
                     onSaved={() => loadMatches(bettingGroupId).then(setAllMatches).catch(() => {})} />
                 ))}
                 {groupMatches.length === 0 && (
@@ -398,12 +408,18 @@ export default function FixturesPage() {
 
       {/* Bet sheet */}
       {betTarget && (() => {
-        const doubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id).length;
+        // Count only same-phase double-ups. Knockout draws on the tournament
+        // budget of 4 minus group-stage usage (rollover); group stage stays at 2.
+        const targetKnockout = isKnockout(betTarget);
+        const doubleUpsUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && m.id !== betTarget.id && isKnockout(m) === targetKnockout).length;
+        const groupUsed = allMatches.filter(m => m.my_bet?.double_up === 1 && !isKnockout(m)).length;
+        const maxDoubleUps = targetKnockout ? TOURNAMENT_DOUBLE_UPS - groupUsed : GROUP_STAGE_DOUBLE_UPS;
         return (
           <BetSheet
             match={betTarget}
             groupId={bettingGroupId !== "none" ? bettingGroupId : groups[0]?.id}
             doubleUpsUsed={doubleUpsUsed}
+            maxDoubleUps={maxDoubleUps}
             onClose={() => setBetTarget(null)}
             onSaved={() => {
               setBetTarget(null);
@@ -423,20 +439,28 @@ const CONFIDENCE_OPTIONS = [
   { value: "reckless",  label: "Reckless", emoji: "🔥", pts: { correct: 10, wrong: -10 } },
 ];
 
-function calcPreview(confidence: string | null, doubleUp: boolean) {
+// In knockout rounds the confidence modifier is doubled (base +10 / exact +5
+// unchanged). Mirrors calcPoints + KNOCKOUT_CONFIDENCE_MULTIPLIER in the worker.
+function isKnockout(match: { stage: string; group_name: string | null }): boolean {
+  return match.group_name === null && match.stage !== "Group Stage";
+}
+
+function calcPreview(confidence: string | null, doubleUp: boolean, knockout: boolean) {
   const c = CONFIDENCE_OPTIONS.find(o => o.value === confidence)!;
-  let correct = 10 + c.pts.correct;
-  const wrong = c.pts.wrong;
+  const mult = knockout ? 2 : 1;
+  let correct = 10 + c.pts.correct * mult;
+  const wrong = c.pts.wrong * mult;
   if (doubleUp && correct > 0) correct *= 2;
   return { correctMin: correct, wrong };
 }
 
 function BetSheet({
-  match, groupId, doubleUpsUsed, onClose, onSaved,
+  match, groupId, doubleUpsUsed, maxDoubleUps, onClose, onSaved,
 }: {
   match: Match;
   groupId: string | undefined;
   doubleUpsUsed: number;
+  maxDoubleUps: number;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -459,10 +483,11 @@ function BetSheet({
 
   // How many double ups are still available (editing: if already set, it's still "used" by this bet)
   const alreadyDoubleUp = match.my_bet?.double_up === 1;
-  const doubleUpsRemaining = 2 - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
+  const doubleUpsRemaining = maxDoubleUps - doubleUpsUsed + (alreadyDoubleUp ? 1 : 0);
   const canDoubleUp = doubleUp || doubleUpsRemaining > 0;
 
-  const preview = calcPreview(confidence, doubleUp);
+  const knockout = isKnockout(match);
+  const preview = calcPreview(confidence, doubleUp, knockout);
 
   async function save() {
     if (!groupId) { setError("Select a betting group first"); return; }
@@ -516,28 +541,40 @@ function BetSheet({
 
         {/* Confidence selector */}
         <div className="mb-4">
-          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide">Confidence <span className="normal-case font-normal opacity-70">— optional</span></p>
+          <p className="mb-2 text-xs text-muted font-medium uppercase tracking-wide flex items-center gap-2">
+            Confidence <span className="normal-case font-normal opacity-70">— optional</span>
+            {knockout && (
+              <span className="ml-auto normal-case font-bold text-accent bg-accent/10 border border-accent/30 rounded px-1.5 py-0.5 text-[10px] tracking-normal">
+                🔥 Knockout ×2 booster
+              </span>
+            )}
+          </p>
           <div className="grid grid-cols-4 gap-2">
-            {CONFIDENCE_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                disabled={locked}
-                onClick={() => setConfidence(opt.value)}
-                className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition ${
-                  confidence === opt.value
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-border bg-surface-hover text-muted"
-                } disabled:opacity-40`}
-              >
-                <span className="text-lg leading-none">{opt.emoji}</span>
-                <span className="font-medium">{opt.label}</span>
-                {opt.value && (
-                  <span className="text-[10px] opacity-70">
-                    {opt.pts.correct > 0 ? `+${opt.pts.correct}` : opt.pts.correct}/{opt.pts.wrong}
-                  </span>
-                )}
-              </button>
-            ))}
+            {CONFIDENCE_OPTIONS.map(opt => {
+              const mult = knockout ? 2 : 1;
+              const correct = opt.pts.correct * mult;
+              const wrong = opt.pts.wrong * mult;
+              return (
+                <button
+                  key={String(opt.value)}
+                  disabled={locked}
+                  onClick={() => setConfidence(opt.value)}
+                  className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs transition ${
+                    confidence === opt.value
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border bg-surface-hover text-muted"
+                  } disabled:opacity-40`}
+                >
+                  <span className="text-lg leading-none">{opt.emoji}</span>
+                  <span className="font-medium">{opt.label}</span>
+                  {opt.value && (
+                    <span className="text-[10px] opacity-70">
+                      {correct > 0 ? `+${correct}` : correct}/{wrong}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -554,7 +591,10 @@ function BetSheet({
               <p className={`font-semibold text-sm ${doubleUp ? "text-accent" : "text-foreground"}`}>
                 🎲 Double Up
               </p>
-              <p className="text-[10px] text-muted">Optional · ×2 points if total is positive</p>
+              <p className="text-[10px] text-muted">
+                Optional · ×2 points if total is positive
+                {knockout && <span className="text-accent font-semibold"> · +2 for the knockout phase</span>}
+              </p>
             </div>
             <div className="text-right">
               <p className={`text-xs font-medium ${doubleUp ? "text-accent" : "text-muted"}`}>

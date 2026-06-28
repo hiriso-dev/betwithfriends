@@ -4,7 +4,11 @@ type JsonFn = (data: unknown, status?: number, origin?: string) => Response;
 type ErrFn = (msg: string, status?: number, origin?: string) => Response;
 
 const BET_LOCK_MINUTES = 0;
+// Double Ups: 2 may be spent in the group stage; the whole tournament is capped
+// at 4. So the knockout phase gets 4 − (group-stage used) — unused group-stage
+// Double Ups roll over (0 group used → 4 in knockouts, 1 → 3, 2 → 2).
 const MAX_DOUBLE_UPS = 2;
+const MAX_DOUBLE_UPS_TOURNAMENT = 4;
 
 async function ensureBetColumns(env: Env): Promise<void> {
   try {
@@ -55,15 +59,18 @@ export async function handleBets(
       .bind(group_id, auth.userId).first();
     if (!member) return err("Not a member of this group", 403, origin);
 
-    const match = await env.DB.prepare("SELECT match_date, status FROM matches WHERE id = ?")
-      .bind(match_id).first<{ match_date: number; status: string }>();
+    const match = await env.DB.prepare("SELECT match_date, status, group_name, stage FROM matches WHERE id = ?")
+      .bind(match_id).first<{ match_date: number; status: string; group_name: string | null; stage: string | null }>();
     if (!match) return err("Match not found", 404, origin);
 
     const minutesUntilKickoff = (match.match_date * 1000 - Date.now()) / 60000;
     if (minutesUntilKickoff <= BET_LOCK_MINUTES || match.status !== "scheduled")
       return err("Betting is closed for this match", 423, origin);
 
-    // Validate Double Up limit
+    // Double Up budget: 2 in the group stage, 4 across the whole tournament, so
+    // the knockout phase gets whatever's left (unused group-stage ones roll over).
+    // Knockout matches carry no group_name; group-stage rows always do.
+    const isKnockout = match.group_name === null && match.stage !== "Group Stage";
     if (double_up) {
       const existing = await env.DB.prepare(
         "SELECT COALESCE(double_up, 0) as double_up FROM bets WHERE user_id = ? AND group_id = ? AND match_id = ?"
@@ -72,11 +79,26 @@ export async function handleBets(
       const alreadyUsedHere = (existing?.double_up ?? 0) === 1;
 
       if (!alreadyUsedHere) {
-        const used = await env.DB.prepare(
-          "SELECT COUNT(*) as cnt FROM bets WHERE user_id = ? AND group_id = ? AND COALESCE(double_up, 0) = 1"
-        ).bind(auth.userId, group_id).first<{ cnt: number }>();
-        if ((used?.cnt ?? 0) >= MAX_DOUBLE_UPS)
-          return err(`No Double Ups remaining (max ${MAX_DOUBLE_UPS} per group)`, 400, origin);
+        if (isKnockout) {
+          // Knockout draws on the shared tournament budget of 4 (group stage is
+          // separately capped at 2), so count ALL of the user's double-ups here.
+          const used = await env.DB.prepare(
+            "SELECT COUNT(*) as cnt FROM bets WHERE user_id = ? AND group_id = ? AND COALESCE(double_up, 0) = 1"
+          ).bind(auth.userId, group_id).first<{ cnt: number }>();
+          if ((used?.cnt ?? 0) >= MAX_DOUBLE_UPS_TOURNAMENT)
+            return err(`No Double Ups remaining (max ${MAX_DOUBLE_UPS_TOURNAMENT} across the tournament)`, 400, origin);
+        } else {
+          // Group stage stays capped at 2 — count only group-stage double-ups.
+          const used = await env.DB.prepare(
+            `SELECT COUNT(*) as cnt
+             FROM bets b
+             JOIN matches m ON m.id = b.match_id
+             WHERE b.user_id = ? AND b.group_id = ? AND COALESCE(b.double_up, 0) = 1
+               AND NOT (m.group_name IS NULL AND COALESCE(m.stage, '') != 'Group Stage')`
+          ).bind(auth.userId, group_id).first<{ cnt: number }>();
+          if ((used?.cnt ?? 0) >= MAX_DOUBLE_UPS)
+            return err(`No Double Ups remaining for the group stage (max ${MAX_DOUBLE_UPS})`, 400, origin);
+        }
       }
     }
 
