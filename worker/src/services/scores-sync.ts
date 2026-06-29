@@ -118,10 +118,19 @@ function isSupportedScoreDuration(value: string | null | undefined): value is Ex
 }
 
 function getStoredMatchScores(match: FDMatch, status: Match["status"]): StoredMatchScores {
-  const regularHomeScore = match.score.regularTime?.home ?? match.score.fullTime.home;
-  const regularAwayScore = match.score.regularTime?.away ?? match.score.fullTime.away;
-  const currentHomeScore = regularHomeScore ?? match.score.fullTime.home;
-  const currentAwayScore = regularAwayScore ?? match.score.fullTime.away;
+  // home_score/away_score must always be the REGULAR-TIME (90') score — scoring
+  // ignores extra time and penalties. Prefer the API's explicit regularTime
+  // line; only fall back to fullTime when the match did NOT go to extra time.
+  // For an ET/penalty match, fullTime includes the extra goals, so using it as
+  // the 90' score would mis-score knockout bets (the original bug).
+  const wentToExtraTime =
+    match.score.duration === "EXTRA_TIME" || match.score.duration === "PENALTY_SHOOTOUT";
+  const currentHomeScore =
+    match.score.regularTime?.home ?? (wentToExtraTime ? null : match.score.fullTime.home);
+  const currentAwayScore =
+    match.score.regularTime?.away ?? (wentToExtraTime ? null : match.score.fullTime.away);
+  const regularHomeScore = currentHomeScore;
+  const regularAwayScore = currentAwayScore;
 
   if (status !== "finished") {
     return {
