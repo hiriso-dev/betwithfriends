@@ -162,6 +162,43 @@ function getStoredMatchScores(match: FDMatch, status: Match["status"]): StoredMa
   };
 }
 
+/**
+ * Undo the points that were applied when a match was first finalized.
+ * Called when the API corrects a finished match's score (e.g. 2-2 → 2-1).
+ * Reverses total_points on group_members, then resets points_earned to NULL so
+ * processMatchResult will re-score with the corrected score.
+ */
+async function resetMatchScoring(env: Env, matchId: string): Promise<void> {
+  const scoredBets = await env.DB.prepare(
+    `SELECT b.id, b.group_id, b.user_id, b.points_earned
+     FROM bets b
+     WHERE b.match_id = ? AND b.points_earned IS NOT NULL`
+  ).bind(matchId).all<{ id: string; group_id: string; user_id: string; points_earned: number }>();
+
+  if (scoredBets.results.length === 0) return;
+
+  const matchRow = await env.DB.prepare(
+    "SELECT preview FROM matches WHERE id = ?"
+  ).bind(matchId).first<{ preview: number | null }>();
+  const isPreview = matchRow?.preview === 1;
+
+  const statements: D1PreparedStatement[] = [];
+  for (const bet of scoredBets.results) {
+    if (!isPreview && bet.points_earned !== 0) {
+      statements.push(
+        env.DB.prepare(
+          "UPDATE group_members SET total_points = total_points - ? WHERE group_id = ? AND user_id = ?"
+        ).bind(bet.points_earned, bet.group_id, bet.user_id)
+      );
+    }
+    statements.push(
+      env.DB.prepare("UPDATE bets SET points_earned = NULL WHERE id = ?").bind(bet.id)
+    );
+  }
+
+  await env.DB.batch(statements);
+}
+
 async function getDueTrackedMatches(env: Env, limit: number): Promise<TrackedMatchRow[]> {
   const now = Math.floor(Date.now() / 1000);
   const rows = await env.DB.prepare(
@@ -268,6 +305,21 @@ async function upsertMatchFromApiMatch(env: Env, match: FDMatch, existingId?: st
         "UPDATE matches SET last_api_sync_at = unixepoch() WHERE id = ?"
       ).bind(matchId).run();
     } else {
+      // If the API corrects the score of an already-finished match, reset bet
+      // scoring so processMatchResult re-runs with the corrected score.
+      const wasFinished = existingRow.status === "finished";
+      const scoreChanged =
+        existingRow.home_score !== scores.homeScore ||
+        existingRow.away_score !== scores.awayScore;
+      if (wasFinished && status === "finished" && scoreChanged) {
+        console.log(
+          `Score correction on finished match ${matchId}: ` +
+          `${existingRow.home_score}-${existingRow.away_score} → ${scores.homeScore}-${scores.awayScore}. ` +
+          "Resetting bet scoring."
+        );
+        await resetMatchScoring(env, matchId);
+      }
+
       await env.DB.prepare(`
         UPDATE matches SET
           home_team = ?, away_team = ?,
