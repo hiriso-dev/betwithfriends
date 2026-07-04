@@ -194,6 +194,17 @@ const worker = {
     // doing so means a reminder is never missed in the hour before kickoff.
     await sendPreGameReminders(env);
 
+    // Hourly bulk sync (one football-data call): discovers newly-scheduled
+    // fixtures — knockout ties only exist in the API once their teams are
+    // determined and the per-match tracked sync can never insert them — and
+    // refreshes rows outside the tracked window (e.g. late API corrections to
+    // finished matches). syncScores runs its own finalization pass at the end.
+    if (new Date().getUTCMinutes() === 0) {
+      await syncScores(env);
+      await syncScorers(env);
+      return;
+    }
+
     // Match sync: refresh tracked matches by api_match_id when they are due, and
     // run a catch-up finalization pass for any finished match whose bet points are
     // still unresolved. The tracked refresh caps football-data.org calls/tick so

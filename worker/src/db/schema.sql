@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS matches (
   -- this match (everyone who could be notified has bet or already been sent),
   -- so the every-minute pass can skip it instead of re-querying each tick.
   reminders_done INTEGER NOT NULL DEFAULT 0,
+  -- 1 = points shown on bet cards but NOT added to the leaderboard
+  preview INTEGER,
   last_api_sync_at INTEGER,
   updated_at INTEGER DEFAULT (unixepoch())
 );

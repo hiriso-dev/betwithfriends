@@ -16,7 +16,11 @@ const MAX_CATCH_UP_FINALIZATIONS_PER_TICK = 20;
  *
  * Covers two conditions in one query:
  *  1. A match in the live/lookback date window that is due for an API sync.
- *  2. A finished match with unscored bets (pure-DB finalization, no API call).
+ *  2. A finished match with unscored bets. With scores present this is a
+ *     pure-DB finalization; with NULL scores (ET match whose 90' score the API
+ *     hasn't published yet) it keeps the tracked sync polling the API even
+ *     after the match leaves the date window — otherwise it would stay
+ *     "pending" forever once nothing else wakes the sync.
  */
 export async function hasMatchNeedingScoreSync(env: Env): Promise<boolean> {
   const now = Math.floor(Date.now() / 1000);
@@ -28,8 +32,6 @@ export async function hasMatchNeedingScoreSync(env: Env): Promise<boolean> {
        AND match_date BETWEEN ? AND ?
      ) OR (
        status = 'finished'
-       AND home_score IS NOT NULL
-       AND away_score IS NOT NULL
        AND EXISTS (SELECT 1 FROM bets WHERE match_id = id AND points_earned IS NULL)
      )
      LIMIT 1`
@@ -117,6 +119,21 @@ function isSupportedScoreDuration(value: string | null | undefined): value is Ex
   return value === "REGULAR" || value === "EXTRA_TIME" || value === "PENALTY_SHOOTOUT";
 }
 
+// The API often reports an ET match as FINISHED hours before it publishes the
+// regularTime line. fullTime includes extra-time AND shootout goals in this
+// feed, so when the ET/penalty breakdown lines are present the 90' score can
+// be derived by subtraction instead of storing NULL and leaving the match
+// "pending" until regularTime appears.
+function deriveRegularScore(score: FDMatch["score"], side: "home" | "away"): number | null {
+  const full = score.fullTime?.[side];
+  const extra = score.extraTime?.[side];
+  if (full === null || full === undefined || extra === null || extra === undefined) return null;
+  const pens = score.penalties?.[side];
+  if (score.duration === "PENALTY_SHOOTOUT" && (pens === null || pens === undefined)) return null;
+  const regular = full - extra - (pens ?? 0);
+  return regular >= 0 ? regular : null;
+}
+
 function getStoredMatchScores(match: FDMatch, status: Match["status"]): StoredMatchScores {
   // home_score/away_score must always be the REGULAR-TIME (90') score — scoring
   // ignores extra time and penalties. Prefer the API's explicit regularTime
@@ -126,9 +143,11 @@ function getStoredMatchScores(match: FDMatch, status: Match["status"]): StoredMa
   const wentToExtraTime =
     match.score.duration === "EXTRA_TIME" || match.score.duration === "PENALTY_SHOOTOUT";
   const currentHomeScore =
-    match.score.regularTime?.home ?? (wentToExtraTime ? null : match.score.fullTime.home);
+    match.score.regularTime?.home ??
+    (wentToExtraTime ? deriveRegularScore(match.score, "home") : match.score.fullTime.home);
   const currentAwayScore =
-    match.score.regularTime?.away ?? (wentToExtraTime ? null : match.score.fullTime.away);
+    match.score.regularTime?.away ??
+    (wentToExtraTime ? deriveRegularScore(match.score, "away") : match.score.fullTime.away);
   const regularHomeScore = currentHomeScore;
   const regularAwayScore = currentAwayScore;
 
@@ -464,6 +483,11 @@ export async function syncScores(env: Env, competitionCode = "WC"): Promise<void
     if (!data.matches?.length) return;
 
     for (const match of data.matches) {
+      // Knockout fixtures whose teams aren't determined yet come back with null
+      // team names; inserting them would violate NOT NULL and abort the loop.
+      // They're picked up on a later pass once the teams are known.
+      if (!match.homeTeam?.name || !match.awayTeam?.name) continue;
+
       const matchId = await upsertMatchFromApiMatch(env, match);
       if (mapStatus(match.status) === "finished") {
         await finalizeMatchIfReady(env, matchId);
