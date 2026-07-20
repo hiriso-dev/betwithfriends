@@ -25,6 +25,48 @@ export async function handleSpecialBets(
 
   if (!pathname.startsWith("/api/special-bets")) return err("Not found", 404, origin);
 
+  // GET /api/special-bets/all?group_id=... — every member's special picks +
+  // points, for the tournament-end results breakdown. Any group member can read.
+  if (pathname === "/api/special-bets/all" && request.method === "GET") {
+    const groupId = searchParams.get("group_id");
+    if (!groupId) return err("group_id required", 400, origin);
+
+    const member = await env.DB.prepare("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?")
+      .bind(groupId, auth.userId).first();
+    if (!member) return err("Not a member", 403, origin);
+
+    // LEFT JOIN so members who placed no special bets still appear.
+    const rows = await env.DB.prepare(`
+      SELECT gm.user_id, gm.pseudo, sb.bet_type, sb.bet_value, sb.points_earned
+      FROM group_members gm
+      LEFT JOIN special_bets sb ON sb.user_id = gm.user_id AND sb.group_id = gm.group_id
+      WHERE gm.group_id = ?
+      ORDER BY gm.pseudo
+    `).bind(groupId).all<{
+      user_id: string; pseudo: string;
+      bet_type: string | null; bet_value: string | null; points_earned: number | null;
+    }>();
+
+    type Pick = { value: string; points: number | null };
+    const byUser = new Map<string, { user_id: string; pseudo: string; total_special: number; picks: Record<string, Pick> }>();
+    for (const r of rows.results) {
+      let m = byUser.get(r.user_id);
+      if (!m) {
+        m = { user_id: r.user_id, pseudo: r.pseudo, total_special: 0, picks: {} };
+        byUser.set(r.user_id, m);
+      }
+      if (r.bet_type && r.bet_value !== null) {
+        m.picks[r.bet_type] = { value: r.bet_value, points: r.points_earned };
+        m.total_special += r.points_earned ?? 0;
+      }
+    }
+
+    const members = [...byUser.values()].sort(
+      (a, b) => b.total_special - a.total_special || a.pseudo.localeCompare(b.pseudo)
+    );
+    return json({ members }, 200, origin);
+  }
+
   // GET /api/special-bets?group_id=...
   if (request.method === "GET") {
     const groupId = searchParams.get("group_id");

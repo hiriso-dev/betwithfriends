@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
@@ -192,6 +193,23 @@ export default function HomePage() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Tournament over — banner to the final standings */}
+      {tournamentStarted && (
+        <Link
+          href="/final"
+          className="mb-4 lg:mb-6 flex items-center justify-between rounded-2xl border border-accent/40 bg-gradient-to-r from-accent/15 to-surface px-4 py-3.5 transition active:border-accent"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🏆</span>
+            <div>
+              <p className="font-bold">Final standings are in</p>
+              <p className="text-xs text-muted">See the winner &amp; how the tournament ended</p>
+            </div>
+          </div>
+          <span className="text-accent">→</span>
+        </Link>
       )}
 
       {/* Dashboard grid: stacks on mobile, 3-column on desktop */}

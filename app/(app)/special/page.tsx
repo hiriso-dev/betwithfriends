@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Flag } from "@/components/flag";
@@ -108,6 +109,16 @@ export default function SpecialPage() {
             : "Lock in before June 11 · earn bonus points"}
         </p>
       </div>
+
+      {tournamentStarted && (
+        <Link
+          href="/special/results"
+          className="mb-4 flex items-center justify-between rounded-2xl border border-accent/40 bg-accent/5 px-4 py-3 transition active:border-accent"
+        >
+          <span className="text-sm font-semibold">🏁 See the special bets results</span>
+          <span className="text-accent">→</span>
+        </Link>
+      )}
 
       {/* Group selector */}
       {groups.length > 1 && (
