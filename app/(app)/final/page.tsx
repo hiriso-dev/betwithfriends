@@ -13,6 +13,8 @@ type RankingMember = {
   total_points: number;
   rank: number;
   is_me: boolean;
+  games_played: number;
+  good_results: number;
 };
 
 function fmt(n: number): string {
@@ -155,10 +157,17 @@ export default function FinalPage() {
                   <span className={`w-7 shrink-0 text-center font-bold ${medal ? "text-xl" : "text-sm text-muted"}`}>
                     {medal ?? m.rank}
                   </span>
-                  <span className={`flex-1 font-medium truncate ${m.is_me ? "text-accent" : ""}`}>
-                    {m.pseudo}
-                    {m.is_me && <span className="ml-1.5 text-xs text-muted opacity-60">(you)</span>}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium truncate ${m.is_me ? "text-accent" : ""}`}>
+                      {m.pseudo}
+                      {m.is_me && <span className="ml-1.5 text-xs text-muted opacity-60">(you)</span>}
+                    </p>
+                    <p className="text-[11px] text-muted tabular-nums">
+                      {m.games_played > 0
+                        ? `✓ ${m.good_results}/${m.games_played} results · ${Math.round((m.good_results / m.games_played) * 100)}%`
+                        : "no games played"}
+                    </p>
+                  </div>
                   <span className="font-bold tabular-nums">
                     {fmt(m.total_points)}
                     <span className="ml-0.5 text-xs font-normal text-muted">pts</span>

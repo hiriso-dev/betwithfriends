@@ -201,11 +201,32 @@ export async function handleGroups(
                  AND b.user_id = gm.user_id
                  AND b.match_id = ?
                  AND b.points_earned IS NOT NULL
-             ), 0) as recent_points
+             ), 0) as recent_points,
+             -- Finished games this member bet on (regular-time score available).
+             COALESCE((
+               SELECT COUNT(*)
+               FROM bets b
+               JOIN matches m ON m.id = b.match_id
+               WHERE b.group_id = gm.group_id AND b.user_id = gm.user_id
+                 AND m.status = 'finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+             ), 0) as games_played,
+             -- Correct result = same outcome (both a home win, both away, or both a
+             -- draw), regardless of exact score. Uses the 90' score (home_score).
+             COALESCE((
+               SELECT COUNT(*)
+               FROM bets b
+               JOIN matches m ON m.id = b.match_id
+               WHERE b.group_id = gm.group_id AND b.user_id = gm.user_id
+                 AND m.status = 'finished' AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL
+                 AND (
+                   (m.home_score - m.away_score) * (b.home_score_pred - b.away_score_pred) > 0
+                   OR (m.home_score = m.away_score AND b.home_score_pred = b.away_score_pred)
+                 )
+             ), 0) as good_results
       FROM group_members gm
       WHERE gm.group_id = ?
       ORDER BY gm.total_points DESC
-    `).bind(lastMatch?.id ?? null, groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number }>();
+    `).bind(lastMatch?.id ?? null, groupId).all<{ user_id: string; pseudo: string; total_points: number; rank: number; recent_points: number; games_played: number; good_results: number }>();
 
     const result = rows.results.map((r) => ({ ...r, is_me: r.user_id === auth.userId }));
     return json({ members: result, last_match: lastMatch ?? null }, 200, origin);
