@@ -4,6 +4,13 @@ import { apiFetch } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Flag } from "@/components/flag";
 import { getMatchScoreDisplay } from "@/lib/match-score";
+import { RESULT_BY_TYPE, isCorrectPick } from "@/lib/tournament-results";
+
+type SpecialBetItem = {
+  bet_type: string;
+  bet_value: string;
+  points_earned: number | null;
+};
 
 type BetHistoryItem = {
   id: string;
@@ -72,6 +79,7 @@ function BetHistoryContent() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState(initialGroupId);
   const [bets, setBets] = useState<BetHistoryItem[]>([]);
+  const [specials, setSpecials] = useState<SpecialBetItem[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [pseudo, setPseudo] = useState<string | null>(null);
@@ -116,10 +124,11 @@ function BetHistoryContent() {
     if (selectedGroupId) params.set("group_id", selectedGroupId);
     if (targetUserId) params.set("user_id", targetUserId);
 
-    void apiFetch<{ bets: BetHistoryItem[]; total: number; pseudo: string | null }>(`/api/bets/history?${params}`)
+    void apiFetch<{ bets: BetHistoryItem[]; total: number; pseudo: string | null; specials?: SpecialBetItem[] }>(`/api/bets/history?${params}`)
       .then((data) => {
         if (cancelled) return;
         setBets(data.bets);
+        setSpecials(data.specials ?? []);
         setTotal(data.total);
         setPseudo(data.pseudo);
         setOffset(data.bets.length);
@@ -127,6 +136,7 @@ function BetHistoryContent() {
       .catch(() => {
         if (cancelled) return;
         setBets([]);
+        setSpecials([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -210,7 +220,43 @@ function BetHistoryContent() {
         </div>
       )}
 
-      {bets.length === 0 ? (
+      {/* Special bets — count toward the total but aren't per-match */}
+      {specials.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-accent/30 bg-accent/5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+            <p className="text-xs font-bold uppercase tracking-wider text-accent">Special bets</p>
+            <span className="text-xs font-bold tabular-nums text-accent">
+              +{specials.reduce((s, b) => s + (b.points_earned ?? 0), 0).toFixed(0)}pts
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {specials
+              .slice()
+              .sort((a, b) => Object.keys(RESULT_BY_TYPE).indexOf(a.bet_type) - Object.keys(RESULT_BY_TYPE).indexOf(b.bet_type))
+              .map((b) => {
+                const meta = RESULT_BY_TYPE[b.bet_type];
+                const settled = b.points_earned !== null;
+                const correct = settled && isCorrectPick(b.bet_type, b.bet_value);
+                return (
+                  <div key={b.bet_type} className="flex items-center gap-2 px-4 py-2 text-sm">
+                    <span className="w-5 shrink-0 text-center">{meta?.emoji ?? "•"}</span>
+                    <span className="w-20 shrink-0 text-xs text-muted">{meta?.label ?? b.bet_type}</span>
+                    <span className="flex-1 truncate">{b.bet_value}</span>
+                    {settled ? (
+                      <span className={`shrink-0 text-xs font-bold tabular-nums ${correct ? "text-success" : "text-danger"}`}>
+                        {correct ? `✓ +${b.points_earned!.toFixed(0)}` : "✗ 0"}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-muted">pending</span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {bets.length === 0 && specials.length === 0 ? (
         targetUserId ? (
           <div className="py-16 text-center">
             <p className="text-5xl mb-4">🎯</p>

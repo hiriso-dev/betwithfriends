@@ -96,7 +96,19 @@ export async function handleBetHistory(
       WHERE b.user_id = ? ${groupFilter} ${visibilityFilter}
     `).bind(...countBinds).first<{ count: number }>();
 
-    return json({ bets: rows.results, total: total?.count ?? 0, pseudo: targetPseudo }, 200, origin);
+    // The viewed user's tournament special bets (champion, runner_up, …). These
+    // count toward total_points but aren't in the per-match `bets` list, so the
+    // history breakdown would otherwise never reconcile with the leaderboard.
+    // Only fetched on the first page to avoid re-sending on "load more".
+    const specialBinds = groupId ? [viewingUserId, groupId] : [viewingUserId];
+    const specialFilter = groupId ? "AND group_id = ?" : "";
+    const specials = offset === 0
+      ? (await env.DB.prepare(
+          `SELECT bet_type, bet_value, points_earned FROM special_bets WHERE user_id = ? ${specialFilter} ORDER BY bet_type`
+        ).bind(...specialBinds).all()).results
+      : [];
+
+    return json({ bets: rows.results, total: total?.count ?? 0, pseudo: targetPseudo, specials }, 200, origin);
   }
 
   return err("Not found", 404, origin);
